@@ -6,6 +6,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
+import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -73,13 +74,32 @@ final class Ui {
         s.setBlockIncrement(step);
         s.setMaxWidth(Double.MAX_VALUE);
         int decimals = decimals(step);
-        Label shown = label(format(value, decimals), "value");
+        // Der Wert lässt sich auch eintippen, sogar über die Grenzen des Reglers hinaus.
+        TextField shown = new TextField(format(value, decimals));
+        shown.getStyleClass().add("value-field");
+        shown.setPrefColumnCount(5);
         s.valueProperty().addListener((o, a, b) -> {
             double v = step > 0 ? Math.round(b.doubleValue() / step) * step : b.doubleValue();
-            shown.setText(format(v, decimals));
+            if (!shown.isFocused()) shown.setText(format(v, decimals));
             onChange.accept(v);
         });
+        Runnable commit = () -> {
+            try {
+                double v = Double.parseDouble(shown.getText().strip().replace(',', '.'));
+                if (v > s.getMax()) s.setMax(v);
+                if (v < s.getMin()) s.setMin(v);
+                s.setValue(v);
+            } catch (NumberFormatException e) {
+                // ungültige Eingabe verwerfen
+            }
+            shown.setText(format(s.getValue(), decimals));
+        };
+        shown.setOnAction(e -> commit.run());
+        shown.focusedProperty().addListener((o, a, focused) -> {
+            if (!focused) commit.run();
+        });
         HBox head = new HBox(label(label, "field-label"), grow(), shown);
+        head.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         return new VBox(2, head, s);
     }
 

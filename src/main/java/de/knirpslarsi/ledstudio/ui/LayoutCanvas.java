@@ -44,6 +44,8 @@ public final class LayoutCanvas extends Pane {
 
     public final Set<String> selection = new LinkedHashSet<>();
     private final List<Runnable> selectionListeners = new ArrayList<>();
+    private Set<String> highlight = Set.of();
+    private java.util.function.Consumer<Fixture> fixtureClick;
     private boolean ledMode, showNumbers = true, clickIdentifies = true, snap = true;
     private Set<String> sharedIds = new HashSet<>();
 
@@ -106,6 +108,16 @@ public final class LayoutCanvas extends Pane {
             canvas.setHeight(getHeight());
             if (!editable) fitPending = true;
         }
+    }
+
+    /** Hebt Bauteile hervor (Ziel der gewählten Ebene). */
+    public void setHighlight(Set<String> ids) {
+        highlight = ids;
+    }
+
+    /** Nur Vorschau: Klick auf ein Bauteil. */
+    public void onFixtureClick(java.util.function.Consumer<Fixture> c) {
+        fixtureClick = c;
     }
 
     public void onSelection(Runnable r) {
@@ -309,7 +321,7 @@ public final class LayoutCanvas extends Pane {
     private void drawFixtureBody(GraphicsContext g, Fixture f, int chainIndex, boolean unresolved) {
         double x = sx(f.x), y = sy(f.y);
         boolean shared = sharedIds.contains(f.id);
-        Color line = unresolved ? WARN : shared ? WARN : OUTLINE;
+        Color line = unresolved ? WARN : shared ? WARN : highlight.contains(f.id) ? ACCENT : OUTLINE;
         g.save();
         g.translate(x, y);
         g.rotate(f.rotation);
@@ -566,6 +578,11 @@ public final class LayoutCanvas extends Pane {
     }
 
     private void onRelease(MouseEvent e) {
+        if (!editable && fixtureClick != null && e.getButton() == MouseButton.PRIMARY
+                && Math.hypot(e.getX() - pressX, e.getY() - pressY) < 4) {
+            Fixture f = hitFixture(e.getX(), e.getY());
+            if (f != null) fixtureClick.accept(f);
+        }
         if (drag == Drag.RUBBER) {
             double x0 = wx(Math.min(pressX, e.getX())), x1 = wx(Math.max(pressX, e.getX()));
             double y0 = wy(Math.min(pressY, e.getY())), y1 = wy(Math.max(pressY, e.getY()));

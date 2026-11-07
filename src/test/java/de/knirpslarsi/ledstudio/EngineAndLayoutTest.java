@@ -317,7 +317,8 @@ class EngineAndLayoutTest {
                 effect.reset(layout);
                 f.layout = layout;
                 f.out = new int[layout.leds.length];
-                boolean lit = layout.leds.length == 0;
+                // Musik-Animationen bleiben ohne Ton zu Recht dunkel.
+                boolean lit = layout.leds.length == 0 || effect.needsAudio();
                 for (int i = 0; i < 400; i++) {
                     f.t = f.rawT = i * 0.033;
                     f.dt = 0.033;

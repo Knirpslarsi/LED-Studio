@@ -17,6 +17,7 @@ public final class AudioEngine {
     private final Supplier<Project.Audio> settings;
     private volatile boolean running = true;
     private volatile boolean restart;
+    private volatile boolean forced;
     /** Gesamt, Bass, Mitten, Höhen. */
     public volatile double[] values = new double[4];
     public volatile double stamp;
@@ -34,6 +35,11 @@ public final class AudioEngine {
 
     public void stop() {
         running = false;
+    }
+
+    /** Hält die Aufnahme auch ohne globale Soundreaktion an, weil eine Ebene sie braucht. */
+    public void setForced(boolean on) {
+        forced = on;
     }
 
     public void restart() {
@@ -54,7 +60,7 @@ public final class AudioEngine {
     private void run() {
         while (running) {
             Project.Audio cfg = settings.get();
-            if (!cfg.enabled) {
+            if (!cfg.enabled && !forced) {
                 status = "Soundreaktion aus";
                 values = new double[4];
                 sleep(150);
@@ -69,7 +75,7 @@ public final class AudioEngine {
                 ArrayList<float[]> packets = new ArrayList<>();
                 while (running && !restart) {
                     Project.Audio now = settings.get();
-                    if (!now.enabled || !now.device.equals(device)) break;
+                    if ((!now.enabled && !forced) || !now.device.equals(device)) break;
                     packets.clear();
                     capture.read(packets);
                     if (packets.isEmpty()) {

@@ -275,14 +275,34 @@ public final class LedStudioApp extends Application {
                 core.layoutChanged();
             }
             if (core.demo) {
-                core.selectPreset("Plasma");
+                demoScene();
                 effectsPage.externalChange();
+                effectsPage.showTab(1);
             }
             if (pages.get("Layout") instanceof LayoutPage page) page.selectFirst();
-            String[] names = pages.keySet().toArray(new String[0]);
-            shoot(dir, names, 0);
+            java.util.List<String> names = new java.util.ArrayList<>(pages.keySet());
+            names.add("Feinschliff");
+            shoot(dir, names.toArray(new String[0]), 0);
         });
         wait.play();
+    }
+
+    /** Für Screenshots: eine Vorlage, bei der jeder Teil des Aufbaus etwas anderes macht. */
+    private void demoScene() {
+        var fixtures = core.project.fixtures;
+        Project.Preset scene = new Project.Preset();
+        scene.name = "Jeder eigener Effekt";
+        scene.layers = new java.util.ArrayList<>();
+        String[][] parts = {{"rotor", "Hue 2 Channel 5"}, {"plasma", "Hue 2 Channel 1"}, {"aurora", "Hue 2 Channel 2"}};
+        for (String[] part : parts) {
+            Project.Layer l = new Project.Layer();
+            l.effect = part[0];
+            fixtures.stream().filter(f -> f.zoneName.equals(part[1])).findFirst().ifPresent(
+                    f -> l.targets = new java.util.ArrayList<>(java.util.List.of(de.knirpslarsi.ledstudio.layout.Targets.zone(f.deviceKey, part[1]))));
+            scene.layers.add(l);
+        }
+        core.project.presets.add(0, scene);
+        core.selectPreset(scene.name);
     }
 
     private void shoot(String dir, String[] names, int i) {
@@ -290,7 +310,12 @@ public final class LedStudioApp extends Application {
             quit();
             return;
         }
-        showPage(names[i]);
+        if (names[i].equals("Feinschliff")) {
+            showPage("Effekte");
+            effectsPage.showTab(2);
+        } else {
+            showPage(names[i]);
+        }
         PauseTransition t = new PauseTransition(Duration.seconds(1.5));
         t.setOnFinished(e -> {
             WritableImage img = stage.getScene().snapshot(null);

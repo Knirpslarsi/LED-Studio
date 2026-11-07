@@ -6,14 +6,17 @@ import de.knirpslarsi.ledstudio.effects.Effect;
 import de.knirpslarsi.ledstudio.effects.Effects;
 import de.knirpslarsi.ledstudio.effects.Params;
 import de.knirpslarsi.ledstudio.layout.CompiledLayout;
+import de.knirpslarsi.ledstudio.layout.LayerView;
 import de.knirpslarsi.ledstudio.model.Project;
 import de.knirpslarsi.ledstudio.openrgb.LedBackend;
 import de.knirpslarsi.ledstudio.util.Colors;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.LockSupport;
@@ -22,23 +25,48 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Bildschleife: berechnet den Effekt, legt mehrfach belegte Adressen zusammen und schreibt an OpenRGB.
- * Sie läuft auch ohne Verbindung weiter, damit die Vorschau im Editor immer lebt.
+ * Bildschleife: berechnet alle Ebenen, legt sie übereinander, fasst mehrfach belegte Adressen zusammen und
+ * schreibt an OpenRGB. Sie läuft auch ohne Verbindung weiter, damit die Vorschau immer lebt.
  */
 public final class Engine {
     private static final Logger LOG = Logger.getLogger("Engine");
     private static final long KEEPALIVE_NANOS = 1_000_000_000L;
 
+    /** Was über Änderungen hinweg erhalten bleibt, damit Regler den Effekt nicht neu starten. */
+    private static final class Runtime {
+        final Effect effect;
+        double t;
+        boolean broken;
+        int[] trail = new int[0];
+        String signature = "";
+        volatile boolean resetPending = true;
+
+        Runtime(Effect effect) {
+            this.effect = effect;
+        }
+    }
+
+    /** Eine Ebene, fertig zum Rechnen. */
+    private static final class Run {
+        Project.Layer layer;
+        Runtime runtime;
+        LayerView view;
+        Params params;
+        int[] stops;
+        String id;
+        int[] out;
+    }
+
     /** Alles, was die Oberfläche auf einmal austauscht. */
     private static final class State {
         CompiledLayout layout;
-        Effect effect;
-        Params params;
-        double speed, brightness, trail;
+        List<Run> runs = new ArrayList<>();
+        double speed, brightness, trail, gain, floor;
         int fps;
         Project.Audio audio;
-        boolean resetEffect;
-        String label;
+        boolean off;
+        /** Geräte (Index in layout.devices), die eine aktive Ebene berührt. */
+        boolean[] covered;
     }
 
     private static final Map<String, Double> COLOR_HUES = new HashMap<>();
@@ -65,12 +93,15 @@ public final class Engine {
     private final Consumer<Throwable> onBackendFailure;
     private volatile Consumer<String> onEffectError = s -> {
     };
+    private final Map<String, Runtime> runtimes = new HashMap<>();
+    private final double[] layerLevels = new double[4];
 
     private volatile Set<Integer> identify;
     private volatile long identifyUntil;
     private volatile int[] preview = new int[0];
     private volatile double measuredFps;
     private volatile long framesSent;
+    private volatile String solo;
 
     private final Set<Integer> directSet = new HashSet<>();
     private final Map<Integer, int[]> lastSent = new HashMap<>();
@@ -124,6 +155,15 @@ public final class Engine {
         return framesSent;
     }
 
+    /** Zeigt zum Einstellen nur diese Ebene. null zeigt wieder alle. Wird nicht gespeichert. */
+    public void solo(String layerId) {
+        solo = layerId;
+    }
+
+    public String solo() {
+        return solo;
+    }
+
     /** LEDs (Indizes in layout.leds) weiß zeigen, alles andere der Geräte dunkel. Leere Menge beendet das. */
     public void identify(Set<Integer> leds, long millis) {
         identifyUntil = System.currentTimeMillis() + millis;
@@ -132,7 +172,6 @@ public final class Engine {
 
     /** Übernimmt Einstellungen und Layout. Muss nach jeder Änderung aufgerufen werden. */
     public synchronized void apply(Project project, CompiledLayout layout) {
-        State old = state;
         State s = new State();
         s.layout = layout;
         s.speed = project.speed;
@@ -140,19 +179,52 @@ public final class Engine {
         s.trail = project.trail;
         s.fps = Math.max(5, Math.min(120, project.fps));
         s.audio = copy(project.audio);
+        s.gain = project.audio.gain;
+        s.floor = project.audio.floor;
+        s.covered = new boolean[layout.devices.size()];
         Project.Preset preset = Project.OFF.equals(project.current) ? null : project.preset(project.current);
+        s.off = preset == null;
+        boolean needsAudio = false;
+        Map<String, Runtime> alive = new HashMap<>();
         if (preset != null) {
-            boolean same = old != null && old.effect != null && old.effect.id().equals(preset.effect);
-            s.effect = same ? old.effect : Effects.create(preset.effect);
-            if (s.effect != null) {
-                s.params = new Params(s.effect.params(), preset.params);
-                applyGlobalColor(project.color, s.params);
-                s.resetEffect = !same || old.layout != layout || old.resetEffect;
+            List<Project.Layer> layers = preset.layers();
+            // Unten anfangen: Die erste Ebene der Liste liegt obenauf.
+            for (int i = layers.size() - 1; i >= 0; i--) {
+                Project.Layer l = layers.get(i);
+                Runtime old = runtimes.get(l.id);
+                Runtime rt = old != null && old.effect.id().equals(l.effect) ? old : null;
+                if (rt == null) {
+                    Effect e = Effects.create(l.effect);
+                    if (e == null) continue;
+                    rt = new Runtime(e);
+                }
+                alive.put(l.id, rt);
+                if (!l.enabled) continue;
+                Run run = new Run();
+                run.layer = l;
+                run.id = l.id;
+                run.runtime = rt;
+                run.view = LayerView.build(layout, project.fixtures, l);
+                run.params = new Params(rt.effect.params(), l.params);
+                applyGlobalColor(project.color, run.params);
+                run.stops = LayerFx.stops(l);
+                run.out = new int[run.view.toGlobal.length];
+                String signature = System.identityHashCode(layout) + "|" + l.targets + "|" + l.ledFilter + "|" + l.scope;
+                if (!signature.equals(rt.signature)) {
+                    rt.signature = signature;
+                    rt.resetPending = true;
+                }
+                s.runs.add(run);
+                needsAudio |= rt.effect.needsAudio() || !"off".equals(l.audioBand);
+                for (int g : run.view.toGlobal) {
+                    int device = layout.leds[g].device;
+                    if (device >= 0) s.covered[device] = true;
+                }
             }
-            s.label = preset.name;
-        } else {
-            s.label = "Aus";
         }
+        runtimes.keySet().retainAll(alive.keySet());
+        runtimes.putAll(alive);
+        audio.setForced(needsAudio);
         state = s;
     }
 
@@ -188,7 +260,6 @@ public final class Engine {
 
     private void loop() {
         long startNanos = System.nanoTime(), last = startNanos, next = startNanos;
-        double scaled = 0;
         int[] out = new int[0], trail = new int[0];
         Effect.Frame frame = new Effect.Frame();
         long fpsWindow = startNanos;
@@ -202,45 +273,31 @@ public final class Engine {
             long now = System.nanoTime();
             double dt = Math.min(0.25, (now - last) / 1e9);
             last = now;
-            scaled += dt * s.speed;
             int n = s.layout.leds.length;
             if (out.length != n) {
                 out = new int[n];
                 trail = new int[n];
             }
             Arrays.fill(out, 0);
-            Effect effect = s.effect;
-            if (effect != null) {
-                try {
-                    if (s.resetEffect) {
-                        effect.reset(s.layout);
-                        s.resetEffect = false;
-                    }
-                    frame.layout = s.layout;
-                    frame.t = scaled;
-                    frame.rawT = (now - startNanos) / 1e9;
-                    frame.dt = dt * s.speed;
-                    frame.p = s.params;
-                    frame.out = out;
-                    effect.render(frame);
-                } catch (RuntimeException e) {
-                    LOG.log(Level.WARNING, "Fehler im Effekt " + effect.id(), e);
-                    onEffectError.accept(effect.title() + ": " + e.getMessage());
-                    s.effect = null;
-                    Arrays.fill(out, 0);
-                }
-                if (s.audio.enabled) {
-                    music.render(s.layout, now / 1e9, audio.values, audio.stamp, s.audio, out);
-                }
+            double[] values = audio.values;
+            double stamp = audio.stamp, seconds = now / 1e9;
+            updateLevels(values, stamp, seconds, dt, s);
+            String soloId = solo;
+            for (Run run : s.runs) {
+                if (soloId != null && !soloId.equals(run.id)) continue;
+                renderLayer(run, s, frame, dt, (now - startNanos) / 1e9, seconds, values, stamp, out);
             }
+            if (s.audio.enabled && !s.off) music.render(s.layout, seconds, values, stamp, s.audio, out);
             post(s, out, trail, dt);
             Set<Integer> id = identify;
+            boolean identifying = false;
             if (id != null && System.currentTimeMillis() < identifyUntil) {
+                identifying = true;
                 for (int i = 0; i < n; i++) out[i] = id.contains(i) ? 0xFFFFFF : 0;
             } else if (id != null) {
                 identify = null;
             }
-            writeAndPreview(s, out, now);
+            writeAndPreview(s, out, now, identifying);
 
             fpsCount++;
             if (now - fpsWindow > 1_000_000_000L) {
@@ -255,6 +312,72 @@ public final class Engine {
             else next = System.nanoTime(); // zu langsam: nicht aufholen, neu takten
         }
         blackout();
+    }
+
+    private void updateLevels(double[] values, double stamp, double seconds, double dt, State s) {
+        boolean fresh = seconds - stamp < 0.5;
+        for (int i = 0; i < 4; i++) {
+            double raw = fresh ? values[i] : 0;
+            double target = Colors.clamp01(Math.max(0, raw - s.floor) * s.gain * 3);
+            double tau = target > layerLevels[i] ? 0.015 : 0.25;
+            layerLevels[i] += (target - layerLevels[i]) * (1 - Math.exp(-Math.max(0.001, dt) / tau));
+        }
+    }
+
+    private void renderLayer(Run run, State s, Effect.Frame frame, double dt, double rawT, double seconds, double[] values, double stamp, int[] out) {
+        Runtime rt = run.runtime;
+        if (rt.broken) return;
+        Project.Layer l = run.layer;
+        CompiledLayout view = run.view.layout;
+        int[] buf = run.out;
+        Arrays.fill(buf, 0);
+        double layerDt = dt * s.speed * l.speed;
+        rt.t += layerDt;
+        try {
+            if (rt.resetPending) {
+                rt.effect.reset(view);
+                rt.resetPending = false;
+            }
+            frame.layout = view;
+            frame.t = rt.t + l.phase;
+            frame.rawT = rawT + l.phase;
+            frame.dt = layerDt;
+            frame.p = run.params;
+            frame.out = buf;
+            frame.audio = values;
+            frame.audioStamp = stamp;
+            frame.now = seconds;
+            rt.effect.render(frame);
+        } catch (RuntimeException e) {
+            LOG.log(Level.WARNING, "Fehler im Effekt " + rt.effect.id(), e);
+            onEffectError.accept(rt.effect.title() + ": " + e.getMessage());
+            rt.broken = true;
+            return;
+        }
+        boolean recolor = !"off".equals(l.colorMode);
+        boolean adjust = l.hueShift != 0 || l.saturation != 1 || l.gamma != 1;
+        double audioFactor = 1;
+        if (!"off".equals(l.audioBand)) {
+            int band = Music.BANDS.indexOf(l.audioBand);
+            double level = layerLevels[band < 0 ? 1 : band];
+            audioFactor = 1 - l.audioAmount + l.audioAmount * level;
+        }
+        double gain = l.brightness * audioFactor;
+        if (rt.trail.length != buf.length) rt.trail = new int[buf.length];
+        double keep = l.trail <= 0 ? 0 : Math.exp(-dt / Math.max(0.01, l.trail * 1.2));
+        int[] map = run.view.toGlobal;
+        for (int i = 0; i < buf.length; i++) {
+            int c = buf[i];
+            if (recolor) c = LayerFx.colorize(c, l.colorMode, run.stops, LayerFx.position(view, i));
+            if (adjust) c = LayerFx.adjust(c, l.hueShift, l.saturation, l.gamma);
+            if (gain != 1) c = gain > 1 ? Colors.pack((int) (Colors.r(c) * gain), (int) (Colors.g(c) * gain), (int) (Colors.b(c) * gain)) : Colors.scale(c, gain);
+            if (keep > 0) {
+                c = Colors.max(c, Colors.scale(rt.trail[i], keep));
+                rt.trail[i] = c;
+            }
+            int g = map[i];
+            out[g] = LayerFx.blend(out[g], c, l.blend, l.opacity);
+        }
     }
 
     private static void post(State s, int[] out, int[] trail, double dt) {
@@ -273,7 +396,7 @@ public final class Engine {
         }
     }
 
-    private void writeAndPreview(State s, int[] out, long now) {
+    private void writeAndPreview(State s, int[] out, long now, boolean identifying) {
         CompiledLayout layout = s.layout;
         int devices = layout.devices.size();
         int[][] buffers = new int[devices][];
@@ -306,6 +429,8 @@ public final class Engine {
             }
             Set<Integer> active = new HashSet<>();
             for (int d = 0; d < devices; d++) {
+                // Ein Gerät ohne aktive Ebene bleibt in Ruhe und behält z. B. seinen eigenen Hardware-Effekt.
+                if (!s.off && !identifying && !s.audio.enabled && !s.covered[d]) continue;
                 CompiledLayout.DeviceSlot slot = layout.devices.get(d);
                 active.add(slot.controllerIndex);
                 int[] data = buffers[d];
@@ -315,7 +440,7 @@ public final class Engine {
                 }
                 send(b, slot.controllerIndex, data, now);
             }
-            // Geräte, die aus dem Layout geflogen sind, einmal dunkel schalten.
+            // Geräte, die eben noch gesteuert wurden, einmal dunkel schalten.
             for (Integer idx : touched.keySet().toArray(new Integer[0])) {
                 if (!active.contains(idx)) {
                     b.setLeds(idx, new int[touched.get(idx)]);

@@ -211,7 +211,8 @@ final class LegacyEffects {
     static final class Rainbow extends Simple {
         Rainbow() {
             super("rainbow", "Regenbogen", "Das ganze Spektrum wandert durch die Kette.",
-                    List.of(num("speed", "Tempo", 0.2, 0.01, 3, 0.01), bool("spatial", "Nach Position statt Kette", false)));
+                    List.of(num("speed", "Tempo", 0.2, 0.01, 3, 0.01), bool("spatial", "Nach Position statt Kette", false),
+                            num("repeat", "Wiederholungen", 1, 0.1, 10, 0.1), num("sat", "Sättigung", 1, 0, 1, 0.01)));
         }
 
         @Override
@@ -219,9 +220,10 @@ final class LegacyEffects {
             Led[] leds = f.layout.leds;
             double speed = f.p.d("speed");
             boolean spatial = f.p.b("spatial");
+            double repeat = f.p.d("repeat"), sat = f.p.d("sat");
             for (int i = 0; i < leds.length; i++) {
                 double offset = spatial ? leds[i].x + leds[i].y * 0.5 : (double) i / leds.length;
-                f.out[i] = Colors.hsvFloor(f.t * speed + offset, 1, 1);
+                f.out[i] = Colors.hsvFloor(f.t * speed + offset * repeat, sat, 1);
             }
         }
     }
@@ -229,21 +231,26 @@ final class LegacyEffects {
     static final class Breathing extends Simple {
         Breathing() {
             super("breathing", "Atmen", "Sanftes Ein- und Ausblenden in einer Farbe.",
-                    List.of(hue(0.6), num("speed", "Tempo", 0.5, 0.02, 4, 0.01)));
+                    List.of(hue(0.6), num("speed", "Tempo", 0.5, 0.02, 4, 0.01), num("min", "Dunkelste Stufe", 0, 0, 1, 0.01),
+                            num("max", "Hellste Stufe", 1, 0, 1, 0.01), num("spread", "Versatz pro Bauteil", 0, 0, 1, 0.01)));
         }
 
         @Override
         public void render(Frame f) {
-            double v = (Math.sin(2 * Math.PI * f.p.d("speed") * f.t) + 1) / 2;
-            int c = Colors.hsvFloor(f.p.d("hue"), 1, v);
-            for (int i = 0; i < f.out.length; i++) f.out[i] = c;
+            double speed = f.p.d("speed"), min = f.p.d("min"), max = f.p.d("max"), spread = f.p.d("spread"), hue = f.p.d("hue");
+            Led[] leds = f.layout.leds;
+            for (int i = 0; i < leds.length; i++) {
+                double v = (Math.sin(2 * Math.PI * (speed * f.t - leds[i].fixture * spread)) + 1) / 2;
+                f.out[i] = Colors.hsvFloor(hue, 1, min + (max - min) * v);
+            }
         }
     }
 
     static final class Comet extends Simple {
         Comet() {
             super("comet", "Komet", "Heller Kopf mit langem Schweif, einmal rundherum.",
-                    List.of(hue(0.55), num("speed", "Tempo (LEDs/s)", 12, 0.5, 100, 0.5), num("tail", "Schweiflänge", 6, 1, 60, 0.5)));
+                    List.of(hue(0.55), num("speed", "Tempo (LEDs/s)", 12, 0.5, 100, 0.5), num("tail", "Schweiflänge", 6, 1, 60, 0.5),
+                            integer("count", "Anzahl Kometen", 1, 1, 12)));
         }
 
         @Override
@@ -251,8 +258,9 @@ final class LegacyEffects {
             int n = f.out.length;
             if (n == 0) return;
             double head = floorMod(f.t * f.p.d("speed"), n), tail = f.p.d("tail"), hue = f.p.d("hue");
+            double spacing = (double) n / Math.max(1, f.p.i("count"));
             for (int i = 0; i < n; i++) {
-                double d = floorMod(head - i, n);
+                double d = floorMod(head - i, spacing);
                 f.out[i] = Colors.hsvFloor(hue, 1, Math.pow(Math.max(0, 1 - d / tail), 2));
             }
         }
@@ -299,12 +307,13 @@ final class LegacyEffects {
     static final class Static extends Simple {
         Static() {
             super("static", "Statisch", "Eine feste Farbe.",
-                    List.of(hue(0.0), num("sat", "Sättigung", 1, 0, 1, 0.01), num("val", "Helligkeit", 1, 0, 1, 0.01)));
+                    List.of(bool("use_color", "Genaue Farbe statt Farbton", false), color("color", "Genaue Farbe", "#A020FF"),
+                            hue(0.0), num("sat", "Sättigung", 1, 0, 1, 0.01), num("val", "Helligkeit", 1, 0, 1, 0.01)));
         }
 
         @Override
         public void render(Frame f) {
-            int c = Colors.hsvFloor(f.p.d("hue"), f.p.d("sat"), f.p.d("val"));
+            int c = f.p.b("use_color") ? f.p.color("color") : Colors.hsvFloor(f.p.d("hue"), f.p.d("sat"), f.p.d("val"));
             for (int i = 0; i < f.out.length; i++) f.out[i] = c;
         }
     }

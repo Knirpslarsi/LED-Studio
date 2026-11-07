@@ -26,10 +26,15 @@ public class Project {
     public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     public static final String OFF = "off";
 
+    /**
+     * Eine Vorlage besteht aus Ebenen. Ältere Vorlagen haben nur effect + params; sie werden beim ersten
+     * Zugriff zu einer Ebene, die alles abdeckt.
+     */
     public static class Preset {
         public String name;
         public String effect;
         public Map<String, Object> params = new LinkedHashMap<>();
+        public List<Layer> layers;
 
         public Preset() {
         }
@@ -38,6 +43,59 @@ public class Project {
             this.name = name;
             this.effect = effect;
             this.params = new LinkedHashMap<>(params);
+        }
+
+        public List<Layer> layers() {
+            if (layers == null) {
+                layers = new ArrayList<>();
+                if (effect != null) {
+                    Layer l = new Layer();
+                    l.effect = effect;
+                    l.params = params == null ? new LinkedHashMap<>() : new LinkedHashMap<>(params);
+                    layers.add(l);
+                }
+                effect = null;
+                params = null;
+            }
+            return layers;
+        }
+
+        /** Tiefe Kopie mit neuen Ebenen-IDs. */
+        public Preset copy(String newName) {
+            layers();
+            Preset c = GSON.fromJson(GSON.toJson(this), Preset.class);
+            c.name = newName;
+            c.layers.forEach(l -> l.id = java.util.UUID.randomUUID().toString());
+            return c;
+        }
+    }
+
+    /** Eine Ebene: ein Effekt auf einem frei wählbaren Ziel, mit eigenem Feinschliff. Obere Ebenen liegen über unteren. */
+    public static class Layer {
+        public String id = java.util.UUID.randomUUID().toString();
+        public String name = "";
+        public boolean enabled = true;
+        public String effect = "rainbow";
+        public Map<String, Object> params = new LinkedHashMap<>();
+        /** Leer = alles. Sonst "device:<key>", "zone:<key>#<zone>", "fixture:<id>" oder "none". */
+        public List<String> targets = new ArrayList<>();
+        /** "own": Effekt füllt genau sein Ziel. "global": Effekt läuft über den ganzen Aufbau, nur das Ziel zeigt ihn. */
+        public String scope = "own";
+        public String blend = "normal";
+        public double opacity = 1, brightness = 1, saturation = 1, hueShift = 0, gamma = 1, speed = 1, phase = 0, trail = 0;
+        public double rotate = 0, scale = 1;
+        public boolean mirrorX, mirrorY, reverse;
+        public String ledFilter = "all";
+        public String colorMode = "off";
+        public String color1 = "#A020FF", color2 = "#00DDFF", color3 = "#FF2080";
+        public boolean useColor3;
+        public String audioBand = "off";
+        public double audioAmount = 1;
+
+        public Layer copy() {
+            Layer c = GSON.fromJson(GSON.toJson(this), Layer.class);
+            c.id = java.util.UUID.randomUUID().toString();
+            return c;
         }
     }
 

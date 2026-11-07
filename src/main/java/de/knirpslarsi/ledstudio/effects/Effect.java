@@ -20,6 +20,9 @@ public abstract class Effect {
         public double dt;
         public Params p;
         public int[] out;
+        /** Rohpegel (Gesamt, Bass, Mitten, Höhen), Zeitstempel und jetzige Zeit in Sekunden. */
+        public double[] audio = new double[4];
+        public double audioStamp, now;
     }
 
     public abstract String id();
@@ -32,6 +35,11 @@ public abstract class Effect {
     }
 
     public abstract List<ParamSpec> params();
+
+    /** True, wenn der Effekt Ton braucht. */
+    public boolean needsAudio() {
+        return false;
+    }
 
     public void reset(CompiledLayout layout) {
     }

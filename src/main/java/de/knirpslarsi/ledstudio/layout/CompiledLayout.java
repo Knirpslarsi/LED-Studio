@@ -33,6 +33,28 @@ public final class CompiledLayout {
         public int device = -1;
         /** LED-Index im Gerät. */
         public int address = -1;
+
+        Led copy() {
+            Led c = new Led();
+            c.seq = seq;
+            c.fixture = fixture;
+            c.k = k;
+            c.m = m;
+            c.wx = wx;
+            c.wy = wy;
+            c.x = x;
+            c.y = y;
+            c.u = u;
+            c.s = s;
+            c.angle = angle;
+            c.radius = radius;
+            c.rim = rim;
+            c.skipped = skipped;
+            c.brightness = brightness;
+            c.device = device;
+            c.address = address;
+            return c;
+        }
     }
 
     /** Ein Gerät, das mindestens eine LED im Layout hat. */
@@ -69,6 +91,11 @@ public final class CompiledLayout {
         this.height = height;
         this.unresolved = unresolved;
         this.fixtureStart = fixtureStart;
+    }
+
+    /** Ausschnitt für eine Ebene; nur die Felder, die Effekte brauchen. */
+    static CompiledLayout view(Led[] leds, int fanCount, double width, double height) {
+        return new CompiledLayout(leds, List.of(), fanCount, width, height, List.of(), new int[0]);
     }
 
     public static CompiledLayout compile(List<Fixture> fixtures, List<Controller> controllers) {

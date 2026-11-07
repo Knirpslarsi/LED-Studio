@@ -94,3 +94,18 @@
 .dialog-pane .header-panel { -fx-background-color: -panel2; }
 .dialog-pane .header-panel .label { -fx-text-fill: -fg; }
 .dialog-pane > .button-bar > .container { -fx-background-color: -panel; }
+
+.value-field { -fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: -accent; -fx-font-size: 12px; -fx-padding: 0 2; -fx-alignment: center-right; -fx-pref-width: 62; }
+.value-field:focused { -fx-background-color: #1a1a21; -fx-border-color: -accent; }
+.tab-pane .tab-header-background { -fx-background-color: -bg; }
+.tab-pane > .tab-header-area { -fx-padding: 8 8 0 8; }
+.tab-pane .tab { -fx-background-color: -panel2; -fx-background-radius: 6 6 0 0; -fx-padding: 4 10; }
+.tab-pane .tab:selected { -fx-background-color: -accent; }
+.tab-pane .tab .tab-label { -fx-text-fill: -fg; }
+.tab-pane .tab:selected .tab-label { -fx-text-fill: white; }
+.tab-pane:focused > .tab-header-area > .headers-region > .tab:selected .focus-indicator { -fx-border-color: transparent; }
+.layer-row { -fx-padding: 5 8; -fx-background-radius: 6; -fx-background-color: #1a1a21; }
+.layer-row:hover { -fx-background-color: #272732; }
+.layer-row.selected { -fx-background-color: #3d2d63; }
+.target-indent-1 { -fx-padding: 0 0 0 18; }
+.target-indent-2 { -fx-padding: 0 0 0 36; }

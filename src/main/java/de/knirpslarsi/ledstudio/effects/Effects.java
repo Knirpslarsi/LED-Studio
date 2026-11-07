@@ -22,6 +22,7 @@ public final class Effects {
         add(LegacyEffects.Fire::new);
         add(LegacyEffects.Static::new);
         add(LegacyEffects.CounterWave::new);
+        add(MusicEffect::new);
     }
 
     private Effects() {

@@ -29,13 +29,25 @@ Bedienung: Ziehen verschiebt (Alt: ohne Raster), Griffe drehen und skalieren, Ma
 
 Solange ein Effekt läuft, steuert LED Studio nur Geräte mit mindestens einem Bauteil im Layout. Alles andere bleibt unberührt. Nicht zugeordnete LEDs eines gesteuerten Geräts bleiben aus.
 
-## Effekte
+## Effekte und Ebenen
 
-Rotor, Vortex, Plasma, Aurora, Wellenringe, Meteorregen, Radar, Scanner, Lava, Sternenhimmel, Matrix-Regen, Farbverlauf, Farbrad, Herzschlag, Feuer, dazu der Balken über die Lüfterränder, Lauflicht, Regenbogen, Atmen, Komet, Welle, Statisch und Gegenwelle. Alle Regler sind pro Vorlage einstellbar und werden sofort live übernommen.
+Eine Vorlage besteht aus beliebig vielen **Ebenen**. Jede Ebene ist ein Effekt auf einem frei wählbaren Ziel: alles, ein Gerät, eine Zone oder einzelne Lüfter. So läuft zum Beispiel Plasma auf der Tastatur, ein Rotor auf den Lüftern und ein Musik-Effekt auf dem Mainboard. Bauteile wählst du im Reiter **Ziel** oder per Klick in der Vorschau. **Je Gerät eine Ebene** teilt eine Ebene passend auf. Geräte ohne aktive Ebene bleiben unberührt.
+
+Pro Ebene einstellbar (**Feinschliff**):
+
+- **Überblendung:** Normal, Addieren, Aufhellen, Multiplizieren, Abziehen und Deckkraft
+- **Farbe:** Farben des Effekts durch eine Farbe oder einen Verlauf ersetzen, Farbton, Sättigung, Helligkeit, Gamma
+- **Zeit:** eigenes Tempo, Versatz, Nachleuchten
+- **Bereich:** Effekt nur über das Ziel oder über den ganzen Aufbau, nur Rand-LEDs oder nur jede zweite LED, Laufrichtung, spiegeln, drehen, Muster-Größe
+- **Musik:** Helligkeit folgt Bass, Mitten, Höhen oder Gesamtpegel
+
+**Solo** zeigt beim Einstellen nur eine Ebene. Jeder Reglerwert lässt sich auch eintippen, auch über die Grenzen des Reglers hinaus.
+
+Effekte: Rotor, Vortex, Plasma, Aurora, Wellenringe, Meteorregen, Radar, Scanner, Lava, Sternenhimmel, Matrix-Regen, Farbverlauf, Farbrad, Herzschlag, Feuer, dazu der Balken über die Lüfterränder, Lauflicht, Regenbogen, Atmen, Komet, Welle, Statisch und Gegenwelle. Alle Regler sind pro Vorlage einstellbar und werden sofort live übernommen.
 
 ![Effekte](docs/screenshots/Effekte.png)
 
-**Musik:** Beat-Balken, Bass-Komet, Doppelwelle, Fan-Kaskade, Regenbogenlauf, Beat-Ringe, Spektrum-Ringe, VU-Meter und Puls. Quelle ist der PC-Sound oder ein Mikrofon. Audio wird nur lokal ausgewertet, nie gespeichert oder übertragen.
+**Musik:** Für alle Geräte auf der Seite **Musik** oder pro Gerät als Ebene mit dem Effekt **Musik-Animation**. Beat-Balken, Bass-Komet, Doppelwelle, Fan-Kaskade, Regenbogenlauf, Beat-Ringe, Spektrum-Ringe, VU-Meter und Puls. Quelle ist der PC-Sound oder ein Mikrofon. Audio wird nur lokal ausgewertet, nie gespeichert oder übertragen.
 
 **Eigene Effekte:** JavaScript-Dateien im Effekt-Ordner, siehe [docs/beispiel-effekt.js](docs/beispiel-effekt.js).
 

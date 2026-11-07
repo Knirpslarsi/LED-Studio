@@ -139,6 +139,19 @@ public final class LayoutTools {
         return f;
     }
 
+    /** Alle Zonen eines Geräts als Bauteile, unterhalb von y. */
+    public static List<Fixture> fromDevice(Controller c, double y) {
+        List<Fixture> out = new ArrayList<>();
+        for (Controller.Zone z : c.zones()) {
+            List<Fixture> row = z.segments().size() > 1 ? fromSegments(c, z, 0, y)
+                    : fromZone(c, z, suggestLedsPerFixture(c, z), 0, y);
+            if (row.isEmpty()) continue;
+            out.addAll(row);
+            y = row.stream().mapToDouble(f -> f.y + f.height / 2).max().orElse(y) + 110;
+        }
+        return out;
+    }
+
     /** Alle Zonen untereinander anordnen. */
     public static List<Fixture> autoLayout(List<Controller> controllers) {
         List<Fixture> out = new ArrayList<>();

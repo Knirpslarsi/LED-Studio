@@ -67,6 +67,7 @@ final class MusicPage extends ScrollPane {
         VBox box = new VBox(12,
                 Ui.label("Musik", "page-title"),
                 Ui.label("Ein Musikimpuls startet einen Lauf. Das Audio wird nur lokal ausgewertet, nie gespeichert oder übertragen.", "muted"),
+                wrapped("Diese Soundreaktion gilt für alle Geräte und ersetzt alle Ebenen. Für Musik nur auf einzelnen Geräten: Unter „Effekte“ eine Ebene mit dem Effekt „Musik-Animation“ anlegen."),
                 enabled, status,
                 Ui.section("Animation"),
                 Ui.field("Effekt", mode),
@@ -101,6 +102,12 @@ final class MusicPage extends ScrollPane {
                 for (int i = 0; i < 4; i++) bars[i].setProgress(core.engine.music.levels[i]);
             }
         }.start();
+    }
+
+    private static Label wrapped(String text) {
+        Label l = Ui.label(text, "muted");
+        l.setWrapText(true);
+        return l;
     }
 
     private void save(Runnable r) {
