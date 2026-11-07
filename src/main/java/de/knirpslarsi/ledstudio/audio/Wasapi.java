@@ -70,7 +70,9 @@ final class Wasapi {
         if (call(device, 4, 0 /* STGM_READ */, store) < 0) return "Audiogerät";
         try {
             Memory key = new Memory(20);
-            key.write(0, PKEY_NAME.toByteArray(), 0, 16);
+            // Die GUID muss in Speicher-Reihenfolge stehen; toByteArray liefert die Anzeige-Reihenfolge.
+            PKEY_NAME.write();
+            key.write(0, PKEY_NAME.getPointer().getByteArray(0, 16), 0, 16);
             key.setInt(16, 14);
             Memory value = new Memory(24);
             value.clear();
