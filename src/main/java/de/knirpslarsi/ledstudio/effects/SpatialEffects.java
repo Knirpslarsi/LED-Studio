@@ -38,7 +38,7 @@ final class SpatialEffects {
                             integer("arms", "Flügel", 2, 1, 6), num("speed", "Tempo (U/s)", 0.8, -5, 5, 0.05),
                             num("length", "Flügellänge", 0.6, 0.05, 1, 0.01), num("offset", "Versatz pro Lüfter", 0.12, 0, 1, 0.01),
                             bool("alternate", "Abwechselnd gegenläufig", false),
-                            num("soft", "Weiche Vorderkante", 0.15, 0, 0.5, 0.01)));
+                            num("soft", "Weiche Vorderkante", 0.2, 0, 0.5, 0.01)));
         }
 
         @Override
@@ -231,7 +231,7 @@ final class SpatialEffects {
         Radar() {
             super("radar", "Radar", "Ein Strahl dreht sich um die Mitte und lässt eine Spur zurück.",
                     List.of(hue(0.42), num("speed", "Umdrehungen/s", 0.35, -3, 3, 0.01), num("trail", "Spurlänge", 0.45, 0.02, 1, 0.01),
-                            num("base", "Grundlicht", 0.03, 0, 0.5, 0.01), num("soft", "Weiche Vorderkante", 0.05, 0, 0.3, 0.005)));
+                            num("base", "Grundlicht", 0.03, 0, 0.5, 0.01), num("soft", "Weiche Vorderkante", 0.08, 0, 0.3, 0.005)));
         }
 
         @Override
@@ -243,7 +243,7 @@ final class SpatialEffects {
                 double ang = Math.atan2(leds[i].y - cy, leds[i].x - cx) / (2 * Math.PI);
                 double d = floorMod(f.t * speed - ang, 1);
                 double v = d < trail ? Math.pow(1 - d / trail, 2.2) : 0;
-                if (soft > 0 && d > 1 - soft) v = Math.max(v, (d - (1 - soft)) / soft);
+                if (soft > 0 && d > 1 - soft) v = Math.max(v, LegacyEffects.fadeIn((d - (1 - soft)) / soft));
                 f.out[i] = Colors.hsv(hue, 1 - v * v * 0.6, base + (1 - base) * v);
             }
         }
@@ -343,7 +343,7 @@ final class SpatialEffects {
                         hues[i] = rnd.nextDouble();
                     }
                 }
-                double v = base + (1 - base) * level[i];
+                double v = base + (1 - base) * (rising[i] ? LegacyEffects.fadeIn(level[i]) : level[i]);
                 f.out[i] = Colors.hsv(rainbow ? hues[i] : hue, rainbow ? 1 : 1 - level[i] * level[i] * 0.85, v);
             }
         }
@@ -383,7 +383,7 @@ final class SpatialEffects {
             for (int i = 0; i < leds.length; i++) {
                 int col = Math.min(cols - 1, (int) (leds[i].x / w * cols));
                 double d = drops[col] - leds[i].y / h;
-                double v = d >= 0 && d < tail ? Math.pow(1 - d / tail, 2) : d < 0 && d > -0.05 ? 1 + d / 0.05 : 0;
+                double v = d >= 0 && d < tail ? Math.pow(1 - d / tail, 2) : d < 0 && d > -0.05 ? LegacyEffects.fadeIn(1 + d / 0.05) : 0;
                 double white = 0.7 * Math.max(0, 1 - Math.abs(d) / 0.06);
                 f.out[i] = Colors.scale(Colors.lerp(color, 0xFFFFFF, white), v);
             }

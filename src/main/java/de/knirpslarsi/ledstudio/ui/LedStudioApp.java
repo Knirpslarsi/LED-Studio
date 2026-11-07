@@ -213,8 +213,14 @@ public final class LedStudioApp extends Application {
             p.trail = v;
             core.settingsChanged();
         });
-        for (VBox v : new VBox[]{brightness, speed, trail}) {
-            v.setPrefWidth(190);
+        VBox transition = Ui.slider("Übergang (ms)", 0, 400, p.smoothMs, 5, v -> {
+            p.smoothMs = v;
+            core.settingsChanged();
+        });
+        javafx.scene.control.Tooltip.install(transition, new javafx.scene.control.Tooltip(
+                "Wie weich jede LED zur nächsten Farbe wechselt. Mehr ist weicher, 0 ist hart. Gilt für alle Effekte."));
+        for (VBox v : new VBox[]{brightness, speed, trail, transition}) {
+            v.setPrefWidth(160);
             HBox.setHgrow(v, Priority.SOMETIMES);
         }
         ComboBox<String> color = new ComboBox<>(FXCollections.observableArrayList(Engine.GLOBAL_COLORS));
@@ -243,7 +249,7 @@ public final class LedStudioApp extends Application {
                 core.settingsChanged();
             }
         });
-        HBox bar = new HBox(16, power, brightness, speed, trail, Ui.field("Farbe", color), Ui.field("Bilder/s", fps));
+        HBox bar = new HBox(16, power, brightness, speed, transition, trail, Ui.field("Farbe", color), Ui.field("Bilder/s", fps));
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.getStyleClass().add("global-bar");
         return bar;

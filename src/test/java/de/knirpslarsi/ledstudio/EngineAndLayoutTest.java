@@ -108,6 +108,7 @@ class EngineAndLayoutTest {
         p.current = "Rot";
         p.presets.add(new Project.Preset("Rot", "static", Map.of("hue", 0.0)));
         p.fps = 120;
+        p.smoothMs = 0;
         return p;
     }
 

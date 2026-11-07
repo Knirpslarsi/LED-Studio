@@ -163,7 +163,12 @@ final class LegacyEffects {
     static double runner(double d, double cycle, double tail, double soft) {
         double v = d < tail ? Math.pow(1 - d / tail, 2) : 0;
         double ahead = cycle - d;
-        return soft > 0 && ahead < soft ? Math.max(v, 1 - ahead / soft) : v;
+        return soft > 0 && ahead < soft ? Math.max(v, fadeIn(1 - ahead / soft)) : v;
+    }
+
+    /** Einblenden, das fürs Auge gleichmäßig wirkt: Kleine LED-Werte sehen schon hell aus. */
+    static double fadeIn(double x) {
+        return Math.pow(Colors.clamp01(x), 2.2);
     }
 
     static double floorMod(double a, double b) {
@@ -193,7 +198,7 @@ final class LegacyEffects {
                     num("speed", "Tempo (LEDs/s)", 10, 0.5, 80, 0.5),
                     num("tail", "Schweiflänge", 5, 1, 40, 0.5),
                     num("gap", "Pause am Ende", 8, 0, 60, 0.5),
-                    num("soft", "Weicher Einlauf (LEDs)", 1, 0, 10, 0.1).help("Die nächste LED blendet ein, statt schlagartig anzugehen. Wichtig bei langsamem Tempo."));
+                    num("soft", "Weicher Einlauf (LEDs)", 1.5, 0, 10, 0.1).help("Die nächste LED blendet ein, statt schlagartig anzugehen. Wichtig bei langsamem Tempo."));
         }
 
         @Override
@@ -213,7 +218,7 @@ final class LegacyEffects {
                     double d = floorMod(head / m - leds[i].fixture, fanCycle);
                     v = d < 1 ? 1 : Math.max(0, 2 - d);
                     double ahead = (fanCycle - d) * m;
-                    if (soft > 0 && ahead < soft) v = Math.max(v, 1 - ahead / soft);
+                    if (soft > 0 && ahead < soft) v = Math.max(v, fadeIn(1 - ahead / soft));
                 } else {
                     v = runner(floorMod(head - i, cycle), cycle, tail, soft);
                 }
@@ -264,7 +269,7 @@ final class LegacyEffects {
         Comet() {
             super("comet", "Komet", "Heller Kopf mit langem Schweif, einmal rundherum.",
                     List.of(hue(0.55), num("speed", "Tempo (LEDs/s)", 12, 0.5, 100, 0.5), num("tail", "Schweiflänge", 6, 1, 60, 0.5),
-                            integer("count", "Anzahl Kometen", 1, 1, 12), num("soft", "Weicher Einlauf (LEDs)", 1, 0, 10, 0.1)));
+                            integer("count", "Anzahl Kometen", 1, 1, 12), num("soft", "Weicher Einlauf (LEDs)", 1.5, 0, 10, 0.1)));
         }
 
         @Override

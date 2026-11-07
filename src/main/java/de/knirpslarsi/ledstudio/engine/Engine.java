@@ -64,7 +64,7 @@ public final class Engine {
     private static final class State {
         CompiledLayout layout;
         List<Run> runs = new ArrayList<>();
-        double speed, brightness, trail, gain, floor;
+        double speed, brightness, trail, gain, floor, smoothSeconds;
         int fps;
         Project.Audio audio;
         boolean off;
@@ -98,6 +98,7 @@ public final class Engine {
     };
     private final Map<String, Runtime> runtimes = new HashMap<>();
     private final double[] layerLevels = new double[4];
+    private final SmoothFilter smooth = new SmoothFilter();
 
     private volatile Set<Integer> identify;
     private volatile long identifyUntil;
@@ -180,6 +181,7 @@ public final class Engine {
         s.speed = project.speed;
         s.brightness = project.brightness;
         s.trail = project.trail;
+        s.smoothSeconds = project.smoothMs / 1000;
         s.fps = Math.max(5, Math.min(120, project.fps));
         s.audio = copy(project.audio);
         s.gain = project.audio.gain;
@@ -297,6 +299,7 @@ public final class Engine {
             }
             if (s.audio.enabled && !s.off) music.render(s.layout, seconds, values, stamp, s.audio, out);
             post(s, out, trail, dt);
+            smooth.apply(out, dt, s.smoothSeconds);
             Set<Integer> id = identify;
             boolean identifying = false;
             if (id != null && System.currentTimeMillis() < identifyUntil) {

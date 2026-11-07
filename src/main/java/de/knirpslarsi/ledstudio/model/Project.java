@@ -110,6 +110,8 @@ public class Project {
 
     public String current = "Lila Balken";
     public double speed = 1.0, brightness = 1.0, trail = 0.0;
+    /** Übergangszeit jeder LED in Millisekunden. */
+    public double smoothMs = 70;
     public String color = "preset";
     public int fps = 40;
     public String host = "127.0.0.1";

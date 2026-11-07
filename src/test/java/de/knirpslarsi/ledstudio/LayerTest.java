@@ -99,6 +99,7 @@ class LayerTest {
         p.presets = new ArrayList<>(List.of(preset));
         p.current = "Test";
         p.fps = 120;
+        p.smoothMs = 0;
         p.fixtures = fixtures;
         return p;
     }

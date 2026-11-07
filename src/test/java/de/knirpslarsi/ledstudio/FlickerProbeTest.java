@@ -60,6 +60,38 @@ class FlickerProbeTest {
         return max;
     }
 
+    /** Dein Lauflicht: So wechselt eine LED wirklich, Bild für Bild (Stromwert → wie hell es wirkt). */
+    @Test
+    void nextLedFadesInVisibly() {
+        CompiledLayout l = layout();
+        Effect e = Effects.create("rim_chase");
+        Effect.Frame f = new Effect.Frame();
+        f.layout = l;
+        f.out = new int[l.leds.length];
+        f.p = new Params(e.params(), Map.of("hue", 0.0, "gap", 0.0, "tail", 3.0, "speed", 3.0));
+        de.knirpslarsi.ledstudio.engine.SmoothProbe filter = new de.knirpslarsi.ledstudio.engine.SmoothProbe();
+        double dt = 1.0 / 40;
+        StringBuilder trace = new StringBuilder();
+        int previous = 0, biggestPerceivedStep = 0, risingFrames = 0;
+        for (int i = 0; i < 80; i++) {
+            f.t = i * dt;
+            f.rawT = f.t;
+            e.render(f);
+            filter.apply(f.out, dt, 0.07);
+            int v = (f.out[3] >> 16) & 255;
+            int perceived = (int) Math.round(100 * Math.pow(v / 255.0, 1 / 2.2));
+            trace.append(perceived).append(' ');
+            if (i > 0 && perceived > previous) {
+                biggestPerceivedStep = Math.max(biggestPerceivedStep, perceived - previous);
+                risingFrames++;
+            }
+            previous = perceived;
+        }
+        System.out.println("Wahrgenommene Helligkeit LED 4 in %: " + trace + " | groesster Schritt " + biggestPerceivedStep + " | Bilder " + risingFrames);
+        assertTrue(biggestPerceivedStep <= 25, "LED springt: " + trace);
+        assertTrue(risingFrames >= 6, "Anstieg zu kurz: " + trace);
+    }
+
     private static CompiledLayout layout() {
         List<Controller> c = new DemoBackend().controllers();
         return CompiledLayout.compile(LayoutTools.legacyNzxtChain(c), c);
@@ -100,6 +132,7 @@ class FlickerProbeTest {
         p.presets = new ArrayList<>(List.of(preset));
         p.current = preset.name;
         p.fps = 40;
+        p.smoothMs = 0;
         Engine e = new Engine(new AudioEngine(() -> p.audio), x -> {
         });
         CompiledLayout layout = CompiledLayout.compile(p.fixtures, c);
