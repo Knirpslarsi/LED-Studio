@@ -45,11 +45,19 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Name: "{autoprograms}\LED Studio"; Filename: "{app}\LEDStudio.exe"
 Name: "{autodesktop}\LED Studio"; Filename: "{app}\LEDStudio.exe"; Tasks: desktopicon
 
-[Registry]
-; Beim Deinstallieren den Autostart-Eintrag entfernen, falls er gesetzt wurde.
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "LEDStudio"; Flags: uninsdeletevalue dontcreatekey
-
 [Run]
 Filename: "{app}\LEDStudio.exe"; Description: "LED Studio starten"; Flags: nowait postinstall skipifsilent
 ; Nach einem stillen Update startet die App von selbst wieder.
 Filename: "{app}\LEDStudio.exe"; Flags: nowait; Check: WizardSilent
+
+[Code]
+// Autostart nur entfernen, wenn er auf diese App zeigt. Der gleichnamige Eintrag der alten Python-Version bleibt stehen.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Value: String;
+begin
+  if (CurUninstallStep = usPostUninstall)
+    and RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'LEDStudio', Value)
+    and (Pos('ledstudio.exe', Lowercase(Value)) > 0) then
+    RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'LEDStudio');
+end;
