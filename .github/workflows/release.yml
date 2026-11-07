@@ -1,0 +1,41 @@
+name: Release
+
+# Ein Tag wie v1.2.3 baut die Setup-EXE und veröffentlicht sie. Der Autoupdater der App findet sie dort.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Inno Setup installieren
+        run: choco install innosetup --no-progress -y
+      - name: Version aus dem Tag lesen
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - name: Testen und bauen
+        shell: bash
+        run: ./gradlew test setupExe -Pversion="$VERSION" --no-daemon
+      - name: Prüfsumme erzeugen
+        shell: bash
+        working-directory: build/release
+        run: sha256sum "LEDStudio-Setup-$VERSION.exe" > "LEDStudio-Setup-$VERSION.exe.sha256"
+      - name: Release veröffentlichen
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "build/release/LEDStudio-Setup-$VERSION.exe" \
+            "build/release/LEDStudio-Setup-$VERSION.exe.sha256" \
+            --title "LED Studio $VERSION" --generate-notes
