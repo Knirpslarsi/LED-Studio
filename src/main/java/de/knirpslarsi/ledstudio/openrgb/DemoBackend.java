@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Simulierte Hardware: damit läuft die komplette App ohne OpenRGB (Start mit --demo, Tests, Screenshots). */
-public final class DemoBackend implements LedBackend {
+public class DemoBackend implements LedBackend {
     private final List<Controller> controllers = new ArrayList<>();
     public volatile long framesWritten;
 

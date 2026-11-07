@@ -31,11 +31,14 @@ import java.util.logging.Logger;
 public final class Engine {
     private static final Logger LOG = Logger.getLogger("Engine");
     private static final long KEEPALIVE_NANOS = 1_000_000_000L;
+    private static final double MIN_EFFECT_SPEED = 0.001;
 
     /** Was über Änderungen hinweg erhalten bleibt, damit Regler den Effekt nicht neu starten. */
     private static final class Runtime {
         final Effect effect;
         double t;
+        /** Mit welchem Tempo-Regler t zuletzt gerechnet wurde. */
+        double speedUsed = Double.NaN;
         boolean broken;
         int[] trail = new int[0];
         String signature = "";
@@ -206,6 +209,11 @@ public final class Engine {
                 run.runtime = rt;
                 run.view = LayerView.build(layout, project.fixtures, l);
                 run.params = new Params(rt.effect.params(), l.params);
+                if (run.params.has("speed")) {
+                    // Effekte rechnen t * Tempo. Bei 0 ginge die Position verloren, deshalb bleibt ein winziger Rest.
+                    double speed = run.params.d("speed");
+                    if (Math.abs(speed) < MIN_EFFECT_SPEED) run.params.set("speed", speed < 0 ? -MIN_EFFECT_SPEED : MIN_EFFECT_SPEED);
+                }
                 applyGlobalColor(project.color, run.params);
                 run.stops = LayerFx.stops(l);
                 run.out = new int[run.view.toGlobal.length];
@@ -332,6 +340,14 @@ public final class Engine {
         int[] buf = run.out;
         Arrays.fill(buf, 0);
         double layerDt = dt * s.speed * l.speed;
+        // Effekte rechnen t * Tempo. Ändert sich der Regler, wird t so umgerechnet, dass der Effekt an seiner
+        // Stelle bleibt und nur schneller oder langsamer weiterläuft, statt an eine andere Stelle zu springen.
+        boolean hasSpeed = run.params.has("speed");
+        double effectSpeed = hasSpeed ? run.params.d("speed") : 1;
+        if (hasSpeed && rt.speedUsed != effectSpeed) {
+            if (!Double.isNaN(rt.speedUsed)) rt.t *= rt.speedUsed / effectSpeed;
+            rt.speedUsed = effectSpeed;
+        }
         rt.t += layerDt;
         try {
             if (rt.resetPending) {
@@ -339,7 +355,7 @@ public final class Engine {
                 rt.resetPending = false;
             }
             frame.layout = view;
-            frame.t = rt.t + l.phase;
+            frame.t = rt.t + l.phase / effectSpeed;
             frame.rawT = rawT + l.phase;
             frame.dt = layerDt;
             frame.p = run.params;

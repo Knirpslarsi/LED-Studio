@@ -37,7 +37,8 @@ final class SpatialEffects {
                             color("background", "Hintergrund", "#000000"),
                             integer("arms", "Flügel", 2, 1, 6), num("speed", "Tempo (U/s)", 0.8, -5, 5, 0.05),
                             num("length", "Flügellänge", 0.6, 0.05, 1, 0.01), num("offset", "Versatz pro Lüfter", 0.12, 0, 1, 0.01),
-                            bool("alternate", "Abwechselnd gegenläufig", false)));
+                            bool("alternate", "Abwechselnd gegenläufig", false),
+                            num("soft", "Weiche Vorderkante", 0.15, 0, 0.5, 0.01)));
         }
 
         @Override
@@ -46,6 +47,7 @@ final class SpatialEffects {
             int arms = f.p.i("arms");
             double speed = f.p.d("speed"), len = f.p.d("length"), offset = f.p.d("offset");
             boolean alternate = f.p.b("alternate");
+            double soft = f.p.d("soft");
             Led[] leds = f.layout.leds;
             for (int i = 0; i < leds.length; i++) {
                 Led l = leds[i];
@@ -53,6 +55,7 @@ final class SpatialEffects {
                 double ph = floorMod((l.angle - dir * f.t * speed - l.fixture * offset) * arms, 1);
                 double tail = 1 - ph;
                 double v = tail < len ? 1 - tail / len : 0;
+                if (soft > 0 && ph < soft) v = Math.max(v, 1 - ph / soft);
                 v = v * v;
                 f.out[i] = Colors.lerp(bg, Colors.lerp(a, b, Math.pow(v, 3)), v);
             }
@@ -78,7 +81,7 @@ final class SpatialEffects {
                 double r = Math.hypot(dx, dy), ang = Math.atan2(dy, dx) / (2 * Math.PI);
                 double w = floorMod((ang + r * twist * 0.25) * arms - f.t * speed * arms, 1);
                 double v = Math.pow(0.5 + 0.5 * Math.cos(2 * Math.PI * w), 2);
-                f.out[i] = Colors.hsv(hue + range * (w - 0.5), 1, 0.08 + 0.92 * v);
+                f.out[i] = Colors.hsv(hue + range * (Math.abs(2 * w - 1) - 0.5), 1, 0.08 + 0.92 * v);
             }
         }
     }
@@ -130,8 +133,9 @@ final class SpatialEffects {
     /** Wellenringe breiten sich von zufälligen Punkten über den ganzen Aufbau aus. */
     static final class Ripple extends LegacyEffects.Simple {
         private final Random rnd = new Random();
+        /** x, y, Alter, Radius, Farbton. */
         private final List<double[]> drops = new ArrayList<>();
-        private double next;
+        private double wait;
 
         Ripple() {
             super("ripple", "Wellenringe", "Tropfen fallen auf den Aufbau, Ringe laufen über alle Bauteile.",
@@ -143,29 +147,34 @@ final class SpatialEffects {
         @Override
         public void reset(CompiledLayout layout) {
             drops.clear();
-            next = 0;
+            wait = 0;
         }
 
         @Override
         public void render(Frame f) {
             CompiledLayout l = f.layout;
-            if (f.t >= next) {
-                next = f.t + (0.5 + rnd.nextDouble()) / f.p.d("rate");
-                drops.add(new double[]{rnd.nextDouble() * l.width, rnd.nextDouble() * l.height, f.t, rnd.nextDouble()});
+            double speed = f.p.d("speed"), width = f.p.d("width"), decay = f.p.d("decay");
+            wait -= f.dt;
+            if (wait <= 0) {
+                wait = (0.5 + rnd.nextDouble()) / f.p.d("rate");
+                drops.add(new double[]{rnd.nextDouble() * l.width, rnd.nextDouble() * l.height, 0, 0, rnd.nextDouble()});
                 if (drops.size() > 16) drops.remove(0);
             }
-            double speed = f.p.d("speed"), width = f.p.d("width"), decay = f.p.d("decay");
+            for (double[] d : drops) {
+                d[2] += f.dt;
+                d[3] += f.dt * speed;
+            }
+            drops.removeIf(d -> Math.exp(-d[2] * decay) < 0.003);
             int base = f.p.color("color");
             boolean rainbow = f.p.b("rainbow");
             Led[] leds = l.leds;
             for (int i = 0; i < leds.length; i++) {
                 int c = 0;
                 for (double[] d : drops) {
-                    double age = f.t - d[2];
-                    if (age < 0) continue;
                     double dist = Math.hypot(leds[i].x - d[0], leds[i].y - d[1]);
-                    double v = Math.exp(-Math.pow((dist - age * speed) / width, 2)) * Math.exp(-age * decay);
-                    if (v > 0.003) c = Colors.add(c, Colors.scale(rainbow ? Colors.hsv(d[3], 1, 1) : base, v));
+                    // Der Ring blendet beim Entstehen ein, statt auf den LEDs in der Nähe aufzublitzen.
+                    double v = Math.exp(-Math.pow((dist - d[3]) / width, 2)) * Math.exp(-d[2] * decay) * Math.min(1, d[2] / 0.15);
+                    if (v > 0.003) c = Colors.add(c, Colors.scale(rainbow ? Colors.hsv(d[4], 1, 1) : base, v));
                 }
                 f.out[i] = c;
             }
@@ -194,13 +203,18 @@ final class SpatialEffects {
             int n = f.out.length;
             if (heat.length != n) heat = new double[n];
             double fade = Math.exp(-f.dt * f.p.d("decay"));
-            for (int i = 0; i < n; i++) heat[i] *= fade * (0.97 + rnd.nextDouble() * 0.03);
+            for (int i = 0; i < n; i++) heat[i] *= fade * Math.exp(-f.dt * rnd.nextDouble() * 1.2);
             if (rnd.nextDouble() < f.p.d("rate") * f.dt) meteors.add(new double[]{-1, 0.6 + rnd.nextDouble() * 0.8});
             double speed = f.p.d("speed");
             meteors.removeIf(m -> {
                 double before = m[0];
                 m[0] += speed * m[1] * f.dt;
-                for (int i = Math.max(0, (int) before); i <= Math.min(n - 1, (int) m[0]); i++) heat[i] = 1;
+                int head = (int) Math.floor(m[0]);
+                for (int i = Math.max(0, (int) Math.floor(before)); i <= Math.min(n - 1, head); i++) heat[i] = 1;
+                // Der Kopf blendet über zwei LEDs ein, damit er auch langsam nicht von LED zu LED springt.
+                double frac = m[0] - Math.floor(m[0]);
+                if (head + 1 >= 0 && head + 1 < n) heat[head + 1] = Math.max(heat[head + 1], 0.5 + 0.5 * frac);
+                if (head + 2 >= 0 && head + 2 < n) heat[head + 2] = Math.max(heat[head + 2], 0.5 * frac);
                 return m[0] >= n + 2;
             });
             double hue = f.p.d("hue");
@@ -208,7 +222,7 @@ final class SpatialEffects {
             for (int i = 0; i < n; i++) {
                 double v = heat[i];
                 double h = rainbow ? (double) i / Math.max(1, n) + f.rawT * 0.1 : hue;
-                f.out[i] = Colors.hsv(h, 1 - Math.pow(v, 6) * 0.8, v * v);
+                f.out[i] = Colors.hsv(h, 1 - Math.pow(v, 3) * 0.7, v * v);
             }
         }
     }
@@ -217,24 +231,27 @@ final class SpatialEffects {
         Radar() {
             super("radar", "Radar", "Ein Strahl dreht sich um die Mitte und lässt eine Spur zurück.",
                     List.of(hue(0.42), num("speed", "Umdrehungen/s", 0.35, -3, 3, 0.01), num("trail", "Spurlänge", 0.45, 0.02, 1, 0.01),
-                            num("base", "Grundlicht", 0.03, 0, 0.5, 0.01)));
+                            num("base", "Grundlicht", 0.03, 0, 0.5, 0.01), num("soft", "Weiche Vorderkante", 0.05, 0, 0.3, 0.005)));
         }
 
         @Override
         public void render(Frame f) {
-            double hue = f.p.d("hue"), speed = f.p.d("speed"), trail = f.p.d("trail"), base = f.p.d("base");
+            double hue = f.p.d("hue"), speed = f.p.d("speed"), trail = f.p.d("trail"), base = f.p.d("base"), soft = f.p.d("soft");
             double cx = f.layout.width / 2, cy = f.layout.height / 2;
             Led[] leds = f.layout.leds;
             for (int i = 0; i < leds.length; i++) {
                 double ang = Math.atan2(leds[i].y - cy, leds[i].x - cx) / (2 * Math.PI);
                 double d = floorMod(f.t * speed - ang, 1);
                 double v = d < trail ? Math.pow(1 - d / trail, 2.2) : 0;
+                if (soft > 0 && d > 1 - soft) v = Math.max(v, (d - (1 - soft)) / soft);
                 f.out[i] = Colors.hsv(hue, 1 - v * v * 0.6, base + (1 - base) * v);
             }
         }
     }
 
     static final class Scanner extends LegacyEffects.Simple {
+        private double[] glow = new double[0];
+
         Scanner() {
             super("scanner", "Scanner", "Ein Lichtbalken fährt über den Aufbau hin und her, mit Nachzieher.",
                     List.of(hue(0.0), choice("axis", "Richtung", "x", AXIS), num("speed", "Tempo", 0.6, 0.05, 4, 0.01),
@@ -242,17 +259,24 @@ final class SpatialEffects {
         }
 
         @Override
+        public void reset(CompiledLayout layout) {
+            glow = new double[layout.leds.length];
+        }
+
+        @Override
         public void render(Frame f) {
-            double hue = f.p.d("hue"), w = f.p.d("width"), tail = f.p.d("tail");
+            if (glow.length != f.out.length) glow = new double[f.out.length];
+            double hue = f.p.d("hue"), w = f.p.d("width"), speed = Math.abs(f.p.d("speed"));
             String axis = f.p.s("axis");
             double ph = floorMod(f.t * f.p.d("speed"), 2);
             double c = (ph <= 1 ? ph : 2 - ph) * (1 + 2 * w) - w;
-            double dir = ph <= 1 ? 1 : -1;
+            // Der Nachzieher klingt als Nachglühen ab. So bleibt er auch beim Umkehren am Rand ohne Sprung.
+            double keep = Math.exp(-f.dt * 3 * speed / Math.max(0.01, f.p.d("tail")));
             for (int i = 0; i < f.out.length; i++) {
-                double d = (axis(axis, f.layout, i) - c) * dir;
-                double v = Math.abs(d) < w ? 0.5 + 0.5 * Math.cos(Math.PI * d / w)
-                        : d < 0 && tail > 0 && -d < w + tail ? Math.pow(1 - (-d - w) / tail, 2) * 0.5 : 0;
-                f.out[i] = Colors.hsv(hue, 1 - Math.pow(v, 8) * 0.7, v);
+                double d = axis(axis, f.layout, i) - c;
+                double head = Math.abs(d) < w ? 0.5 + 0.5 * Math.cos(Math.PI * d / w) : 0;
+                glow[i] = Math.max(head, glow[i] * keep);
+                f.out[i] = Colors.hsv(hue, 1 - Math.pow(glow[i], 8) * 0.7, glow[i]);
             }
         }
     }
@@ -280,6 +304,7 @@ final class SpatialEffects {
     static final class Twinkle extends LegacyEffects.Simple {
         private final Random rnd = new Random();
         private double[] level = new double[0], hues = new double[0];
+        private boolean[] rising = new boolean[0];
 
         Twinkle() {
             super("twinkle", "Sternenhimmel", "Einzelne LEDs funkeln auf und verglimmen.",
@@ -291,6 +316,7 @@ final class SpatialEffects {
         public void reset(CompiledLayout layout) {
             level = new double[layout.leds.length];
             hues = new double[layout.leds.length];
+            rising = new boolean[layout.leds.length];
         }
 
         @Override
@@ -299,14 +325,23 @@ final class SpatialEffects {
             if (level.length != n) {
                 level = new double[n];
                 hues = new double[n];
+                rising = new boolean[n];
             }
             double rate = f.p.d("rate"), fade = Math.exp(-f.dt * f.p.d("decay")), hue = f.p.d("hue"), base = f.p.d("base");
             boolean rainbow = f.p.b("rainbow");
             for (int i = 0; i < n; i++) {
-                level[i] *= fade;
-                if (rnd.nextDouble() < rate * f.dt) {
-                    level[i] = 1;
-                    hues[i] = rnd.nextDouble();
+                if (rising[i]) {
+                    level[i] += f.dt / 0.12;
+                    if (level[i] >= 1) {
+                        level[i] = 1;
+                        rising[i] = false;
+                    }
+                } else {
+                    level[i] *= fade;
+                    if (level[i] < 0.05 && rnd.nextDouble() < rate * f.dt) {
+                        rising[i] = true;
+                        hues[i] = rnd.nextDouble();
+                    }
                 }
                 double v = base + (1 - base) * level[i];
                 f.out[i] = Colors.hsv(rainbow ? hues[i] : hue, rainbow ? 1 : 1 - level[i] * level[i] * 0.85, v);
@@ -348,8 +383,9 @@ final class SpatialEffects {
             for (int i = 0; i < leds.length; i++) {
                 int col = Math.min(cols - 1, (int) (leds[i].x / w * cols));
                 double d = drops[col] - leds[i].y / h;
-                double v = d >= 0 && d < tail ? Math.pow(1 - d / tail, 2) : 0;
-                f.out[i] = d >= 0 && d < 0.04 ? Colors.lerp(color, 0xFFFFFF, 0.7) : Colors.scale(color, v);
+                double v = d >= 0 && d < tail ? Math.pow(1 - d / tail, 2) : d < 0 && d > -0.05 ? 1 + d / 0.05 : 0;
+                double white = 0.7 * Math.max(0, 1 - Math.abs(d) / 0.06);
+                f.out[i] = Colors.scale(Colors.lerp(color, 0xFFFFFF, white), v);
             }
         }
     }

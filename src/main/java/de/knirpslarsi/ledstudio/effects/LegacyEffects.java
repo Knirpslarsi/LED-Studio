@@ -156,6 +156,16 @@ final class LegacyEffects {
         }
     }
 
+    /**
+     * Helligkeit eines umlaufenden Lichtpunkts. d ist der Abstand hinter dem Kopf (0..cycle). Der Schweif läuft über
+     * das Rundenende hinaus weiter, und die LED vor dem Kopf blendet ein. So gibt es an keiner Stelle einen Sprung.
+     */
+    static double runner(double d, double cycle, double tail, double soft) {
+        double v = d < tail ? Math.pow(1 - d / tail, 2) : 0;
+        double ahead = cycle - d;
+        return soft > 0 && ahead < soft ? Math.max(v, 1 - ahead / soft) : v;
+    }
+
     static double floorMod(double a, double b) {
         return a - Math.floor(a / b) * b;
     }
@@ -182,7 +192,8 @@ final class LegacyEffects {
                     choice("mode", "Modus", "led", "led", "LED für LED", "fan", "Ganze Lüfter"),
                     num("speed", "Tempo (LEDs/s)", 10, 0.5, 80, 0.5),
                     num("tail", "Schweiflänge", 5, 1, 40, 0.5),
-                    num("gap", "Pause am Ende", 8, 0, 60, 0.5));
+                    num("gap", "Pause am Ende", 8, 0, 60, 0.5),
+                    num("soft", "Weicher Einlauf (LEDs)", 1, 0, 10, 0.1).help("Die nächste LED blendet ein, statt schlagartig anzugehen. Wichtig bei langsamem Tempo."));
         }
 
         @Override
@@ -193,15 +204,18 @@ final class LegacyEffects {
             if (total == 0) return;
             double speed = p.d("speed"), tail = Math.max(0.01, p.d("tail")), gap = p.d("gap"), hue = p.d("hue");
             boolean rainbow = p.b("rainbow"), fanMode = "fan".equals(p.s("mode"));
-            double head = floorMod(f.t * speed, total + gap);
+            double soft = p.d("soft"), cycle = total + gap;
+            double head = floorMod(f.t * speed, cycle);
             for (int i = 0; i < total; i++) {
                 double v;
                 if (fanMode) {
-                    double d = head / Math.max(1, leds[i].m) - leds[i].fixture;
-                    v = d < 0 ? 0 : d < 1 ? 1 : Math.max(0, 2 - d);
+                    double m = Math.max(1, leds[i].m), fanCycle = cycle / m;
+                    double d = floorMod(head / m - leds[i].fixture, fanCycle);
+                    v = d < 1 ? 1 : Math.max(0, 2 - d);
+                    double ahead = (fanCycle - d) * m;
+                    if (soft > 0 && ahead < soft) v = Math.max(v, 1 - ahead / soft);
                 } else {
-                    double d = head - i;
-                    v = d >= 0 && d < tail ? Math.pow(1 - d / tail, 2) : 0;
+                    v = runner(floorMod(head - i, cycle), cycle, tail, soft);
                 }
                 f.out[i] = Colors.hsvFloor(hue + (rainbow ? (double) i / total + f.rawT * 0.1 : 0), 1, v);
             }
@@ -250,7 +264,7 @@ final class LegacyEffects {
         Comet() {
             super("comet", "Komet", "Heller Kopf mit langem Schweif, einmal rundherum.",
                     List.of(hue(0.55), num("speed", "Tempo (LEDs/s)", 12, 0.5, 100, 0.5), num("tail", "Schweiflänge", 6, 1, 60, 0.5),
-                            integer("count", "Anzahl Kometen", 1, 1, 12)));
+                            integer("count", "Anzahl Kometen", 1, 1, 12), num("soft", "Weicher Einlauf (LEDs)", 1, 0, 10, 0.1)));
         }
 
         @Override
@@ -258,10 +272,9 @@ final class LegacyEffects {
             int n = f.out.length;
             if (n == 0) return;
             double head = floorMod(f.t * f.p.d("speed"), n), tail = f.p.d("tail"), hue = f.p.d("hue");
-            double spacing = (double) n / Math.max(1, f.p.i("count"));
+            double spacing = (double) n / Math.max(1, f.p.i("count")), soft = f.p.d("soft");
             for (int i = 0; i < n; i++) {
-                double d = floorMod(head - i, spacing);
-                f.out[i] = Colors.hsvFloor(hue, 1, Math.pow(Math.max(0, 1 - d / tail), 2));
+                f.out[i] = Colors.hsvFloor(hue, 1, runner(floorMod(head - i, spacing), spacing, tail, soft));
             }
         }
     }
@@ -276,7 +289,7 @@ final class LegacyEffects {
         public void render(Frame f) {
             double hue = f.p.d("hue"), speed = f.p.d("speed"), width = f.p.d("width");
             for (int i = 0; i < f.out.length; i++) {
-                f.out[i] = Colors.hsvFloor(hue + 0.1 * Math.sin(i / width + f.t), 1,
+                f.out[i] = Colors.hsvFloor(hue + 0.1 * Math.sin(i / width + f.rawT), 1,
                         (Math.sin(i / width * 2 * Math.PI / 3 - f.t * speed * 3) + 1) / 2);
             }
         }

@@ -57,6 +57,7 @@ class GoldenParityTest {
             JsonObject c = item.getAsJsonObject();
             Effect effect = Effects.create(c.get("effect").getAsString());
             Map<String, Object> params = new Gson().fromJson(c.get("params"), LinkedHashMap.class);
+            params.put("soft", 0.0);
             double t = c.get("t").getAsDouble();
             Effect.Frame f = new Effect.Frame();
             f.layout = l;
