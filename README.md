@@ -43,11 +43,18 @@ Pro Ebene einstellbar (**Feinschliff**):
 
 **Solo** zeigt beim Einstellen nur eine Ebene. Jeder Reglerwert lässt sich auch eintippen, auch über die Grenzen des Reglers hinaus.
 
-Effekte: Rotor, Vortex, Plasma, Aurora, Wellenringe, Meteorregen, Radar, Scanner, Lava, Sternenhimmel, Matrix-Regen, Farbverlauf, Farbrad, Herzschlag, Feuer, dazu der Balken über die Lüfterränder, Lauflicht, Regenbogen, Atmen, Komet, Welle, Statisch und Gegenwelle. Alle Regler sind pro Vorlage einstellbar und werden sofort live übernommen.
+Effekte: Rotor, Vortex, Pulsringe, Plasma, Aurora, Wellenringe, Meteorregen, Radar, Scanner, Lava, Sternenhimmel, Matrix-Regen, Farbverlauf, Farbrad, Herzschlag, Feuer, dazu der Balken über die Lüfterränder, Lauflicht, Regenbogen, Atmen, Komet, Welle, Statisch und Gegenwelle. Alle Regler sind pro Vorlage einstellbar und werden sofort live übernommen.
 
 ![Effekte](docs/screenshots/Effekte.png)
 
-**Musik:** Für alle Geräte auf der Seite **Musik** oder pro Gerät als Ebene mit dem Effekt **Musik-Animation**. Beat-Balken, Bass-Komet, Doppelwelle, Fan-Kaskade, Regenbogenlauf, Beat-Ringe, Spektrum-Ringe, VU-Meter und Puls. Quelle ist der PC-Sound oder ein Mikrofon. Audio wird nur lokal ausgewertet, nie gespeichert oder übertragen.
+**Musik:** Für alle Geräte auf der Seite **Musik** oder pro Gerät als Ebene mit dem Effekt **Musik-Animation**. Jeder erkannte Beat startet einen eigenen Lauf, Läufe überlagern sich, es geht kein Beat verloren. Die Beat-Empfindlichkeit ist einstellbar.
+
+- **Auf Beats:** Beat-Balken, Bass-Komet, Doppelwelle, Fan-Kaskade, Regenbogenlauf, Beat-Ringe (aus der Mitte oder aus jedem Bauteil)
+- **Drei-Band-Beats:** Bass schickt Ringe aus der Mitte, Mitten eine Welle quer über den Aufbau, Höhen einen Funkenregen, jeder Bereich in eigener Farbe
+- **Nach Frequenzen:** Equalizer mit 16 Bändern (tief links, hoch rechts, Füllung von unten), Frequenz-Zonen (Bass, Mitten, Höhen je ein Drittel der Kette), Bass-Pumpe mit Höhen-Funken, Tonhöhen-Farbe, Spektrum-Ringe, VU-Meter, Puls
+- **Fester Takt:** Jede Animation läuft auf Wunsch ohne Ton in einem einstellbaren BPM-Takt. Als normaler Effekt gibt es dafür die **Pulsringe**.
+
+Quelle ist der PC-Sound oder ein Mikrofon. Audio wird nur lokal ausgewertet, nie gespeichert oder übertragen.
 
 **Eigene Effekte:** JavaScript-Dateien im Effekt-Ordner, siehe [docs/beispiel-effekt.js](docs/beispiel-effekt.js).
 

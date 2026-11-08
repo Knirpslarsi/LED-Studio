@@ -106,6 +106,14 @@ public class Project {
         public double gain = 4.0, smoothing = 0.75, floor = 0.02, minimum = 0.0, duration = 0.8, pause = 0.1, length = 1.2;
         public String band = "Bass";
         public String palette = "Lila";
+        /** Jeder Beat startet einen eigenen Lauf, statt während eines Laufs ignoriert zu werden. */
+        public boolean overlap = true;
+        public double sensitivity = 1.0;
+        /** "music" oder "bpm" (fester Takt). */
+        public String trigger = "music";
+        public double bpm = 120;
+        /** Ursprung der Ringe: "center" oder "fixture". */
+        public String origin = "center";
     }
 
     public String current = "Lila Balken";

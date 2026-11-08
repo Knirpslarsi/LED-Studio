@@ -23,6 +23,7 @@ public final class Effects {
         add(LegacyEffects.Static::new);
         add(LegacyEffects.CounterWave::new);
         add(MusicEffect::new);
+        add(MusicEffect.PulseRings::new);
     }
 
     private Effects() {

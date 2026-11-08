@@ -73,15 +73,18 @@ final class MusicPage extends ScrollPane {
                 Ui.field("Effekt", mode),
                 Ui.field("Reagiert auf", band),
                 Ui.field("Musikfarbe", palette),
+                check("Jeden Beat zeigen (Läufe überlagern sich)", a.overlap, v -> save(() -> a.overlap = v)),
+                wrapped("Aus: Während ein Lauf läuft, werden neue Beats ignoriert (wie früher)."),
                 Ui.section("Quelle"),
                 source, Ui.button("Quellen laden", this::scanSources),
                 Ui.section("Pegel"), meters,
                 Ui.section("Lauf"),
                 Ui.slider("Dauer / Tempo (Sek.)", 0.15, 4, a.duration, 0.05, v -> save(() -> a.duration = v)),
                 Ui.slider("Effektlänge", 0.2, 4, a.length, 0.05, v -> save(() -> a.length = v)),
-                Ui.slider("Pause danach (Sek.)", 0, 3, a.pause, 0.05, v -> save(() -> a.pause = v)),
+                Ui.slider("Mindestabstand zwischen Beats (Sek.)", 0, 3, a.pause, 0.01, v -> save(() -> a.pause = v)),
+                Ui.slider("Beat-Empfindlichkeit", 0.2, 3, a.sensitivity, 0.05, v -> save(() -> a.sensitivity = v)),
                 Ui.section("Empfindlichkeit"),
-                Ui.slider("Empfindlichkeit", 0.2, 20, a.gain, 0.1, v -> save(() -> a.gain = v)),
+                Ui.slider("Verstärkung", 0.2, 20, a.gain, 0.1, v -> save(() -> a.gain = v)),
                 Ui.slider("Rauschschwelle", 0, 0.3, a.floor, 0.005, v -> save(() -> a.floor = v)),
                 Ui.slider("Grundhelligkeit", 0, 1, a.minimum, 0.01, v -> save(() -> a.minimum = v)),
                 Ui.slider("Glättung der Anzeige", 0, 1, a.smoothing, 0.01, v -> save(() -> a.smoothing = v)));
@@ -102,6 +105,13 @@ final class MusicPage extends ScrollPane {
                 for (int i = 0; i < 4; i++) bars[i].setProgress(core.engine.music.levels[i]);
             }
         }.start();
+    }
+
+    private static CheckBox check(String text, boolean value, java.util.function.Consumer<Boolean> onChange) {
+        CheckBox c = new CheckBox(text);
+        c.setSelected(value);
+        c.selectedProperty().addListener((o, x, b) -> onChange.accept(b));
+        return c;
     }
 
     private static Label wrapped(String text) {

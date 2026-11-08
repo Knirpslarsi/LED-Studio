@@ -13,12 +13,13 @@ import java.util.logging.Logger;
 public final class AudioEngine {
     private static final Logger LOG = Logger.getLogger("Audio");
     private static final int BLOCK = 2048;
+    private static final int SPECTRUM = Music.SPECTRUM;
 
     private final Supplier<Project.Audio> settings;
     private volatile boolean running = true;
     private volatile boolean restart;
     private volatile boolean forced;
-    /** Gesamt, Bass, Mitten, Höhen. */
+    /** Gesamt, Bass, Mitten, Höhen, danach 16 Spektrum-Bänder von 40 Hz bis 16 kHz. */
     public volatile double[] values = new double[4];
     public volatile double stamp;
     public volatile String status = "Soundreaktion aus";
@@ -92,7 +93,10 @@ public final class AudioEngine {
                             if (filled == window.length) {
                                 values = analyse(window, capture.channels, capture.rate);
                                 stamp = System.nanoTime() / 1e9;
-                                filled = 0;
+                                // Halb überlappend weiter: doppelt so viele Messungen, Beats werden schneller erkannt.
+                                int half = window.length / 2;
+                                System.arraycopy(window, half, window, 0, half);
+                                filled = half;
                             }
                         }
                     }
@@ -142,7 +146,7 @@ public final class AudioEngine {
             fft(re, im);
             for (int i = 0; i < power.length; i++) power[i] += (re[i] * re[i] + im[i] * im[i]) / channels;
         }
-        double[] out = new double[4];
+        double[] out = new double[4 + SPECTRUM];
         out[0] = Math.sqrt(rmsSum / (n * channels));
         double norm = Math.max(windowSum * n, 1);
         int[][] bands = {{30, 250}, {250, 2000}, {2000, 16000}};
@@ -153,6 +157,15 @@ public final class AudioEngine {
                 if (f >= bands[b][0] && f < bands[b][1]) sum += power[i];
             }
             out[b + 1] = Math.sqrt(2 * sum / norm);
+        }
+        for (int b = 0; b < SPECTRUM; b++) {
+            double lo = 40 * Math.pow(400, (double) b / SPECTRUM), hi = 40 * Math.pow(400, (double) (b + 1) / SPECTRUM);
+            double sum = 0;
+            for (int i = 0; i < power.length; i++) {
+                double f = (double) i * rate / n;
+                if (f >= lo && f < hi) sum += power[i];
+            }
+            out[4 + b] = Math.sqrt(2 * sum / norm);
         }
         return out;
     }

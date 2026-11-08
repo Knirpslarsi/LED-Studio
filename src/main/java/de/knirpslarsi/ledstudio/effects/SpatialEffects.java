@@ -374,7 +374,7 @@ final class SpatialEffects {
             for (int i = 0; i < cols; i++) {
                 drops[i] += speeds[i] * speed * f.dt;
                 if (drops[i] > 1 + tail + 0.2) {
-                    drops[i] = -rnd.nextDouble() * 0.6;
+                    drops[i] = -0.06 - rnd.nextDouble() * 0.6; // ganz oberhalb starten, sonst blitzt die oberste LED auf
                     speeds[i] = 0.6 + rnd.nextDouble() * 0.8;
                 }
             }

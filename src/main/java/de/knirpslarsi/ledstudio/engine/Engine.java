@@ -239,20 +239,7 @@ public final class Engine {
     }
 
     private static Project.Audio copy(Project.Audio a) {
-        Project.Audio c = new Project.Audio();
-        c.enabled = a.enabled;
-        c.device = a.device;
-        c.mode = a.mode;
-        c.gain = a.gain;
-        c.smoothing = a.smoothing;
-        c.floor = a.floor;
-        c.minimum = a.minimum;
-        c.duration = a.duration;
-        c.pause = a.pause;
-        c.length = a.length;
-        c.band = a.band;
-        c.palette = a.palette;
-        return c;
+        return Project.GSON.fromJson(Project.GSON.toJson(a), Project.Audio.class);
     }
 
     private static void applyGlobalColor(String color, Params p) {
