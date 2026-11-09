@@ -13,6 +13,11 @@ public final class ParamSpec {
     public double min, max = 1, step = 0.01;
     public String help;
     public Map<String, String> choices;
+    /** Überschrift, unter der diese und die folgenden Einstellungen stehen. */
+    public String section;
+    /** Nur sichtbar, wenn die Einstellung showIfParam einen der Werte showIfValues hat. */
+    public String showIfParam;
+    public java.util.Set<String> showIfValues;
 
     private ParamSpec(String name, String label, Type type, Object def) {
         this.name = name;
@@ -60,5 +65,21 @@ public final class ParamSpec {
     public ParamSpec help(String text) {
         help = text;
         return this;
+    }
+
+    public ParamSpec section(String title) {
+        section = title;
+        return this;
+    }
+
+    public ParamSpec showIf(String param, java.util.Collection<String> values) {
+        showIfParam = param;
+        showIfValues = java.util.Set.copyOf(values);
+        return this;
+    }
+
+    /** Ob die Einstellung bei diesen Werten angezeigt wird. */
+    public boolean visible(Params values) {
+        return showIfParam == null || showIfValues.contains(values.s(showIfParam));
     }
 }

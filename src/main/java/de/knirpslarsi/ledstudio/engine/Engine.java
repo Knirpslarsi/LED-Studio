@@ -2,6 +2,9 @@ package de.knirpslarsi.ledstudio.engine;
 
 import de.knirpslarsi.ledstudio.audio.AudioEngine;
 import de.knirpslarsi.ledstudio.audio.Music;
+import de.knirpslarsi.ledstudio.audio.MusicAnalyzer;
+import de.knirpslarsi.ledstudio.audio.SoundChannel;
+import de.knirpslarsi.ledstudio.audio.SoundSource;
 import de.knirpslarsi.ledstudio.effects.Effect;
 import de.knirpslarsi.ledstudio.effects.Effects;
 import de.knirpslarsi.ledstudio.effects.Params;
@@ -41,6 +44,8 @@ public final class Engine {
         double speedUsed = Double.NaN;
         boolean broken;
         int[] trail = new int[0];
+        /** Musiksignal der Ebene. */
+        final SoundChannel sound = new SoundChannel();
         String signature = "";
         volatile boolean resetPending = true;
 
@@ -57,6 +62,8 @@ public final class Engine {
         Params params;
         int[] stops;
         String id;
+        /** Musikreaktion der Ebene, null wenn aus. */
+        SoundChannel.Settings sound;
         int[] out;
     }
 
@@ -97,7 +104,9 @@ public final class Engine {
     private volatile Consumer<String> onEffectError = s -> {
     };
     private final Map<String, Runtime> runtimes = new HashMap<>();
-    private final double[] layerLevels = new double[4];
+    private final java.util.Map<String, Double> layerLevels = new java.util.concurrent.ConcurrentHashMap<>();
+    private final List<MusicAnalyzer.Event> frameEvents = new ArrayList<>();
+    private long eventSeq = Long.MIN_VALUE;
     private final SmoothFilter smooth = new SmoothFilter();
 
     private volatile Set<Integer> identify;
@@ -116,6 +125,7 @@ public final class Engine {
     public Engine(AudioEngine audio, Consumer<Throwable> onBackendFailure) {
         this.audio = audio;
         this.onBackendFailure = onBackendFailure;
+        music.setAnalyzer(audio.analyzer);
     }
 
     public void setOnEffectError(Consumer<String> c) {
@@ -211,6 +221,7 @@ public final class Engine {
                 run.runtime = rt;
                 run.view = LayerView.build(layout, project.fixtures, l);
                 run.params = new Params(rt.effect.params(), l.params);
+                run.sound = soundSettings(l, project.audio);
                 if (run.params.has("speed")) {
                     // Effekte rechnen t * Tempo. Bei 0 ginge die Position verloren, deshalb bleibt ein winziger Rest.
                     double speed = run.params.d("speed");
@@ -236,6 +247,26 @@ public final class Engine {
         runtimes.putAll(alive);
         audio.setForced(needsAudio);
         state = s;
+    }
+
+    private static SoundChannel.Settings soundSettings(Project.Layer l, Project.Audio audio) {
+        if ("off".equals(l.audioBand)) return null;
+        SoundChannel.Settings st = new SoundChannel.Settings();
+        st.source = SoundSource.byId(l.audioBand);
+        st.fromHz = l.audioFrom;
+        st.toHz = l.audioTo;
+        st.threshold = l.audioThreshold;
+        st.contrast = l.audioContrast;
+        st.boost = l.audioBoost;
+        st.attackMs = l.audioAttack;
+        st.releaseMs = l.audioRelease;
+        st.sensitivity = audio == null ? 1 : audio.sensitivity;
+        return st;
+    }
+
+    /** Wie stark die Musikreaktion einer Ebene gerade ausschlägt (0..1), für die Anzeige. */
+    public double layerLevel(String layerId) {
+        return layerLevels.getOrDefault(layerId, 0.0);
     }
 
     private static Project.Audio copy(Project.Audio a) {
@@ -278,7 +309,9 @@ public final class Engine {
             Arrays.fill(out, 0);
             double[] values = audio.values;
             double stamp = audio.stamp, seconds = now / 1e9;
-            updateLevels(values, stamp, seconds, dt, s);
+            frameEvents.clear();
+            if (eventSeq == Long.MIN_VALUE) eventSeq = audio.analyzer.latestSeq();
+            eventSeq = audio.analyzer.poll(eventSeq, frameEvents);
             String soloId = solo;
             for (Run run : s.runs) {
                 if (soloId != null && !soloId.equals(run.id)) continue;
@@ -312,16 +345,6 @@ public final class Engine {
         blackout();
     }
 
-    private void updateLevels(double[] values, double stamp, double seconds, double dt, State s) {
-        boolean fresh = seconds - stamp < 0.5;
-        for (int i = 0; i < 4; i++) {
-            double raw = fresh ? values[i] : 0;
-            double target = Colors.clamp01(Math.max(0, raw - s.floor) * s.gain * 3);
-            double tau = target > layerLevels[i] ? 0.015 : 0.25;
-            layerLevels[i] += (target - layerLevels[i]) * (1 - Math.exp(-Math.max(0.001, dt) / tau));
-        }
-    }
-
     private void renderLayer(Run run, State s, Effect.Frame frame, double dt, double rawT, double seconds, double[] values, double stamp, int[] out) {
         Runtime rt = run.runtime;
         if (rt.broken) return;
@@ -329,7 +352,13 @@ public final class Engine {
         CompiledLayout view = run.view.layout;
         int[] buf = run.out;
         Arrays.fill(buf, 0);
-        double layerDt = dt * s.speed * l.speed;
+        double level = 0;
+        if (run.sound != null) {
+            level = rt.sound.update(run.sound, values, stamp, seconds, dt, frameEvents);
+            layerLevels.put(l.id, level);
+        }
+        // Musik kann das Tempo der Ebene antreiben.
+        double layerDt = dt * s.speed * l.speed * (1 + l.audioSpeed * level);
         // Effekte rechnen t * Tempo. Ändert sich der Regler, wird t so umgerechnet, dass der Effekt an seiner
         // Stelle bleibt und nur schneller oder langsamer weiterläuft, statt an eine andere Stelle zu springen.
         boolean hasSpeed = run.params.has("speed");
@@ -352,6 +381,7 @@ public final class Engine {
             frame.out = buf;
             frame.audio = values;
             frame.audioStamp = stamp;
+            frame.analysis = audio.analyzer;
             frame.now = seconds;
             rt.effect.render(frame);
         } catch (RuntimeException e) {
@@ -361,13 +391,12 @@ public final class Engine {
             return;
         }
         boolean recolor = !"off".equals(l.colorMode);
-        boolean adjust = l.hueShift != 0 || l.saturation != 1 || l.gamma != 1;
-        double audioFactor = 1;
-        if (!"off".equals(l.audioBand)) {
-            int band = Music.BANDS.indexOf(l.audioBand);
-            double level = layerLevels[band < 0 ? 1 : band];
-            audioFactor = 1 - l.audioAmount + l.audioAmount * level;
-        }
+        boolean react = run.sound != null;
+        double hueShift = l.hueShift + (react ? l.audioHue * level : 0);
+        double saturation = l.saturation * (react ? 1 - l.audioSat * level : 1);
+        boolean adjust = hueShift != 0 || saturation != 1 || l.gamma != 1;
+        double audioFactor = react ? 1 - l.audioAmount + l.audioAmount * level : 1;
+        double lift = react ? Colors.clamp01(l.audioFlash * level) : 0;
         double gain = l.brightness * audioFactor;
         if (rt.trail.length != buf.length) rt.trail = new int[buf.length];
         double keep = l.trail <= 0 ? 0 : Math.exp(-dt / Math.max(0.01, l.trail * 1.2));
@@ -375,8 +404,14 @@ public final class Engine {
         for (int i = 0; i < buf.length; i++) {
             int c = buf[i];
             if (recolor) c = LayerFx.colorize(c, l.colorMode, run.stops, LayerFx.position(view, i));
-            if (adjust) c = LayerFx.adjust(c, l.hueShift, l.saturation, l.gamma);
+            if (adjust) c = LayerFx.adjust(c, hueShift, saturation, l.gamma);
             if (gain != 1) c = gain > 1 ? Colors.pack((int) (Colors.r(c) * gain), (int) (Colors.g(c) * gain), (int) (Colors.b(c) * gain)) : Colors.scale(c, gain);
+            if (lift > 0.002) {
+                // Aufblitzen: helle Stellen werden weißer und heller, dunkle bleiben dunkel.
+                double k = lift * Math.max(Colors.r(c), Math.max(Colors.g(c), Colors.b(c))) / 255.0;
+                c = Colors.packD(Colors.r(c) + (255 - Colors.r(c)) * k, Colors.g(c) + (255 - Colors.g(c)) * k,
+                        Colors.b(c) + (255 - Colors.b(c)) * k);
+            }
             if (keep > 0) {
                 c = Colors.max(c, Colors.scale(rt.trail[i], keep));
                 rt.trail[i] = c;

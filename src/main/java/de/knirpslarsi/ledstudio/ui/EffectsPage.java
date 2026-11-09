@@ -137,6 +137,11 @@ final class EffectsPage extends SplitPane {
         tabs.getSelectionModel().select(index);
     }
 
+    /** Für Screenshots: im aktuellen Reiter ganz nach unten scrollen. */
+    void scrollToEnd() {
+        if (tabs.getSelectionModel().getSelectedItem().getContent() instanceof ScrollPane sp) sp.setVvalue(1);
+    }
+
     void externalChange() {
         refreshList();
         selected = null;
@@ -342,15 +347,35 @@ final class EffectsPage extends SplitPane {
         });
         effectForm.getChildren().addAll(Ui.field("Name der Ebene", name), Ui.section("Effekt"), chooser);
         if (effect == null) return;
-        effectForm.getChildren().add(Ui.section("Einstellungen"));
-        Params values = new Params(effect.params(), l.params);
-        for (ParamSpec spec : effect.params()) effectForm.getChildren().add(control(spec, values, l));
+        VBox settings = new VBox();
+        settings.spacingProperty().bind(effectForm.spacingProperty());
+        effectForm.getChildren().add(settings);
+        fillSettings(settings, effect, l);
         Button reset = Ui.button("Effekt-Einstellungen zurücksetzen", () -> {
             l.params = new LinkedHashMap<>();
             layersChanged();
         });
         reset.setMaxWidth(Double.MAX_VALUE);
         effectForm.getChildren().add(reset);
+    }
+
+    /** Einstellungen des Effekts, mit Überschriften; was zur aktuellen Auswahl nicht passt, bleibt verborgen. */
+    private void fillSettings(VBox box, Effect effect, Project.Layer l) {
+        box.getChildren().clear();
+        Params values = new Params(effect.params(), l.params);
+        java.util.Set<String> drivers = new java.util.HashSet<>();
+        for (ParamSpec spec : effect.params()) if (spec.showIfParam != null) drivers.add(spec.showIfParam);
+        String section = "Einstellungen", shown = null;
+        for (ParamSpec spec : effect.params()) {
+            if (spec.section != null) section = spec.section;
+            if (!spec.visible(values)) continue;
+            if (!section.equals(shown)) {
+                box.getChildren().add(Ui.section(section));
+                shown = section;
+            }
+            Runnable rebuild = drivers.contains(spec.name) ? () -> javafx.application.Platform.runLater(() -> fillSettings(box, effect, l)) : null;
+            box.getChildren().add(control(spec, values, l, rebuild));
+        }
     }
 
     private void refreshRowsKeepFocus() {
@@ -363,7 +388,7 @@ final class EffectsPage extends SplitPane {
         core.settingsChanged();
     }
 
-    private Node control(ParamSpec s, Params values, Project.Layer l) {
+    private Node control(ParamSpec s, Params values, Project.Layer l, Runnable onChoice) {
         Node n = switch (s.type) {
             case FLOAT, INT -> Ui.slider(s.label, s.min, s.max, values.d(s.name), s.step, v -> set(l, s.name, v));
             case HUE -> hue(s, values, l);
@@ -374,7 +399,7 @@ final class EffectsPage extends SplitPane {
                 yield c;
             }
             case COLOR -> colorField(s.label, values.color(s.name), v -> set(l, s.name, v));
-            case CHOICE -> choice(s, values, l);
+            case CHOICE -> choice(s, values, l, onChoice);
         };
         if (s.help == null) return n;
         Label help = Ui.label(s.help, "muted");
@@ -428,14 +453,17 @@ final class EffectsPage extends SplitPane {
         return Ui.field(label, new HBox(6, picker, hex));
     }
 
-    private Node choice(ParamSpec s, Params values, Project.Layer l) {
+    private Node choice(ParamSpec s, Params values, Project.Layer l, Runnable onChoice) {
         List<String> keys = new ArrayList<>(s.choices.keySet());
         ComboBox<String> box = new ComboBox<>(FXCollections.observableArrayList(s.choices.values()));
         box.setMaxWidth(Double.MAX_VALUE);
         box.setValue(s.choices.getOrDefault(values.s(s.name), s.choices.values().iterator().next()));
         box.setOnAction(e -> {
             int i = box.getSelectionModel().getSelectedIndex();
-            if (i >= 0) set(l, s.name, keys.get(i));
+            if (i >= 0) {
+                set(l, s.name, keys.get(i));
+                if (onChoice != null) onChoice.run();
+            }
         });
         return Ui.field(s.label, box);
     }
@@ -591,8 +619,58 @@ final class EffectsPage extends SplitPane {
         reverse.setOnAction(e -> fine(() -> l.reverse = reverse.isSelected()));
 
         Map<String, String> bands = new LinkedHashMap<>();
-        bands.put("off", "Keine");
-        Music.BANDS.forEach(b -> bands.put(b, b));
+        bands.put("off", "Keine Musikreaktion");
+        bands.putAll(de.knirpslarsi.ledstudio.audio.SoundSource.choices());
+        if (!"off".equals(l.audioBand) && !bands.containsKey(l.audioBand)) {
+            l.audioBand = de.knirpslarsi.ledstudio.audio.SoundSource.byId(l.audioBand).id; // ältere Werte übernehmen
+        }
+        VBox react = new VBox(10), custom = new VBox(10);
+        reactMeter = new javafx.scene.control.ProgressBar(0);
+        reactMeter.setMaxWidth(Double.MAX_VALUE);
+        custom.getChildren().addAll(
+                Ui.slider("Eigener Bereich von (Hz)", 40, 16000, l.audioFrom, 10, v -> fine(() -> l.audioFrom = v)),
+                Ui.slider("Eigener Bereich bis (Hz)", 40, 16000, l.audioTo, 10, v -> fine(() -> l.audioTo = v)));
+        Runnable showReact = () -> {
+            boolean on = !"off".equals(l.audioBand);
+            react.setVisible(on);
+            react.setManaged(on);
+            boolean own = "custom".equals(l.audioBand);
+            custom.setVisible(own);
+            custom.setManaged(own);
+        };
+        react.getChildren().addAll(
+                Ui.field("Ausschlag gerade", reactMeter),
+                custom,
+                Ui.label("Was die Musik verändert", "field-label"),
+                Ui.slider("Helligkeit", 0, 1, l.audioAmount, 0.01, v -> fine(() -> l.audioAmount = v)),
+                muted("1: ohne Musik dunkel, mit Musik voll. 0: Helligkeit bleibt."),
+                Ui.slider("Tempo antreiben", 0, 4, l.audioSpeed, 0.05, v -> fine(() -> l.audioSpeed = v)),
+                muted("Der Effekt läuft bei Musik schneller, z. B. 2: bis zu dreimal so schnell."),
+                Ui.slider("Farbton verschieben", 0, 1, l.audioHue, 0.01, v -> fine(() -> l.audioHue = v)),
+                Ui.slider("Blasser (Sättigung)", 0, 1, l.audioSat, 0.01, v -> fine(() -> l.audioSat = v)),
+                Ui.slider("Weiß aufblitzen", 0, 1, l.audioFlash, 0.01, v -> fine(() -> l.audioFlash = v)),
+                Ui.label("Signal", "field-label"),
+                Ui.slider("Verstärkung", 0.2, 4, l.audioBoost, 0.05, v -> fine(() -> l.audioBoost = v)),
+                Ui.slider("Schwelle (Leises zählt nicht)", 0, 0.9, l.audioThreshold, 0.01, v -> fine(() -> l.audioThreshold = v)),
+                Ui.slider("Kontrast", 0.3, 4, l.audioContrast, 0.05, v -> fine(() -> l.audioContrast = v)),
+                Ui.slider("Anstieg (ms)", 1, 500, l.audioAttack, 1, v -> fine(() -> l.audioAttack = v)),
+                Ui.slider("Abfall (ms)", 20, 2000, l.audioRelease, 5, v -> fine(() -> l.audioRelease = v)));
+        showReact.run();
+        if (meterTimer == null) {
+            meterTimer = new javafx.animation.AnimationTimer() {
+                private long last;
+
+                @Override
+                public void handle(long now) {
+                    if (now - last < 50_000_000L) return;
+                    last = now;
+                    if (reactMeter != null && selected != null && reactMeter.isVisible()) {
+                        reactMeter.setProgress(core.engine.layerLevel(selected.id));
+                    }
+                }
+            };
+            meterTimer.start();
+        }
 
         fineForm.getChildren().addAll(
                 Ui.section("Überblendung"),
@@ -624,9 +702,21 @@ final class EffectsPage extends SplitPane {
                 Ui.slider("Drehen (°)", 0, 360, l.rotate, 1, v -> fine(() -> l.rotate = v)),
                 Ui.slider("Muster-Größe", 0.1, 5, l.scale, 0.01, v -> fine(() -> l.scale = v)),
                 Ui.section("Musikreaktion"),
-                Ui.field("Helligkeit folgt", options(bands, l.audioBand, v -> fine(() -> l.audioBand = v))),
-                Ui.slider("Stärke", 0, 1, l.audioAmount, 0.01, v -> fine(() -> l.audioAmount = v)),
+                Ui.field("Reagiert auf", options(bands, l.audioBand, v -> {
+                    fine(() -> l.audioBand = v);
+                    showReact.run();
+                })),
+                react,
                 wide(Ui.button("Feinschliff zurücksetzen", this::resetFine)));
+    }
+
+    private javafx.scene.control.ProgressBar reactMeter;
+    private javafx.animation.AnimationTimer meterTimer;
+
+    private static Label muted(String text) {
+        Label l = Ui.label(text, "muted");
+        l.setWrapText(true);
+        return l;
     }
 
     private static Button wide(Button b) {
@@ -655,6 +745,17 @@ final class EffectsPage extends SplitPane {
         l.scale = d.scale;
         l.audioBand = d.audioBand;
         l.audioAmount = d.audioAmount;
+        l.audioSpeed = d.audioSpeed;
+        l.audioHue = d.audioHue;
+        l.audioSat = d.audioSat;
+        l.audioFlash = d.audioFlash;
+        l.audioFrom = d.audioFrom;
+        l.audioTo = d.audioTo;
+        l.audioThreshold = d.audioThreshold;
+        l.audioContrast = d.audioContrast;
+        l.audioBoost = d.audioBoost;
+        l.audioAttack = d.audioAttack;
+        l.audioRelease = d.audioRelease;
         layersChanged();
     }
 

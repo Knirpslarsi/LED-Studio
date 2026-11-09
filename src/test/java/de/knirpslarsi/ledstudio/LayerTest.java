@@ -355,7 +355,7 @@ class LayerTest {
         assertTrue(effect.needsAudio());
         Effect.Frame f = new Effect.Frame();
         f.layout = parent;
-        f.p = new Params(effect.params(), Map.of("gain", 20.0));
+        f.p = new Params(effect.params(), Map.of("gain", 20.0, "mode", "Beat-Balken"));
         f.out = new int[parent.leds.length];
         boolean lit = false;
         for (int i = 0; i < 40; i++) {
@@ -366,5 +366,50 @@ class LayerTest {
             for (int v : f.out) lit |= v != 0;
         }
         assertTrue(lit, "ein Beat startet die Animation");
+    }
+
+    /** Feinschliff: Eine normale Ebene reagiert auf genau den gewählten Bereich der Musik. */
+    private static int[] reactRange(String source) throws Exception {
+        Recording b = new Recording();
+        Project.Layer layer = solid("#FF0000");
+        layer.audioBand = source;
+        layer.audioAmount = 1;
+        Project p = project(LayoutTools.legacyNzxtChain(b.list), layer);
+        AudioEngine audio = new AudioEngine(() -> p.audio);
+        Engine e = new Engine(audio, x -> {
+        });
+        e.apply(p, CompiledLayout.compile(p.fixtures, b.list));
+        e.setBackend(b);
+        e.start();
+        int lo = 255, hi = 0;
+        long start = System.nanoTime();
+        while (System.nanoTime() - start < 2_500_000_000L) {
+            double now = System.nanoTime() / 1e9;
+            boolean on = ((System.nanoTime() - start) / 250_000_000L) % 2 == 0;
+            double[] v = new double[4 + de.knirpslarsi.ledstudio.audio.Music.SPECTRUM];
+            for (int k = 0; k < de.knirpslarsi.ledstudio.audio.Music.SPECTRUM; k++) v[4 + k] = k >= 12 && on ? 0.3 : 0.01;
+            v[0] = 0.1;
+            audio.values = v;
+            audio.stamp = now;
+            Thread.sleep(21);
+            int[] colors = b.last.get(0);
+            if (colors != null && System.nanoTime() - start > 800_000_000L) {
+                int red = (colors[0] >> 16) & 255;
+                lo = Math.min(lo, red);
+                hi = Math.max(hi, red);
+            }
+        }
+        e.stop();
+        return new int[]{lo, hi};
+    }
+
+    @Test
+    void layerReactsToTheChosenSound() throws Exception {
+        int[] high = reactRange("high"), bass = reactRange("bass");
+        System.out.printf("Rote Ebene, nur Höhen pulsieren: Reaktion auf Höhen %d..%d, auf Bass %d..%d%n", high[0], high[1], bass[0], bass[1]);
+        assertTrue(high[1] > 200 && high[0] < 100, "pulsiert mit den Höhen");
+        assertTrue(bass[1] < 60, "auf Bass gestellt bleibt sie dunkel");
+        org.junit.jupiter.api.Assertions.assertEquals(de.knirpslarsi.ledstudio.audio.SoundSource.MID,
+                de.knirpslarsi.ledstudio.audio.SoundSource.byId("Mitten"), "alte Einstellung wird übernommen");
     }
 }

@@ -288,6 +288,8 @@ public final class LedStudioApp extends Application {
             if (pages.get("Layout") instanceof LayoutPage page) page.selectFirst();
             java.util.List<String> names = new java.util.ArrayList<>(pages.keySet());
             names.add("Feinschliff");
+            names.add("Musikreaktion");
+            names.add("Musik-Ebene");
             shoot(dir, names.toArray(new String[0]), 0);
         });
         wait.play();
@@ -307,6 +309,9 @@ public final class LedStudioApp extends Application {
                     f -> l.targets = new java.util.ArrayList<>(java.util.List.of(de.knirpslarsi.ledstudio.layout.Targets.zone(f.deviceKey, part[1]))));
             scene.layers.add(l);
         }
+        // Zeigt im Feinschliff die Musikreaktion einer normalen Ebene.
+        scene.layers.get(0).audioBand = "voice";
+        scene.layers.get(0).audioFlash = 0.4;
         core.project.presets.add(0, scene);
         core.selectPreset(scene.name);
     }
@@ -319,6 +324,22 @@ public final class LedStudioApp extends Application {
         if (names[i].equals("Feinschliff")) {
             showPage("Effekte");
             effectsPage.showTab(2);
+        } else if (names[i].equals("Musikreaktion")) {
+            showPage("Effekte");
+            effectsPage.showTab(2);
+            javafx.application.Platform.runLater(effectsPage::scrollToEnd);
+        } else if (names[i].equals("Musik-Ebene")) {
+            Project.Preset music = new Project.Preset();
+            music.name = "Musik-Ebene";
+            music.layers = new java.util.ArrayList<>();
+            Project.Layer layer = new Project.Layer();
+            layer.effect = "music";
+            music.layers.add(layer);
+            core.project.presets.add(0, music);
+            core.selectPreset(music.name);
+            effectsPage.externalChange();
+            showPage("Effekte");
+            effectsPage.showTab(0);
         } else {
             showPage(names[i]);
         }

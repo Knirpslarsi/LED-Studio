@@ -23,6 +23,10 @@ public final class AudioEngine {
     public volatile double[] values = new double[4];
     public volatile double stamp;
     public volatile String status = "Soundreaktion aus";
+    /** Versteht die Musik: Tempo, Spannung, Drops, einzelne Klänge. */
+    public final MusicAnalyzer analyzer = new MusicAnalyzer();
+    /** Zeichnet die Messwerte zum Abstimmen auf; hält die Aufnahme so lange an. */
+    public final AnalysisRecorder recorder = new AnalysisRecorder();
 
     public AudioEngine(Supplier<Project.Audio> settings) {
         this.settings = settings;
@@ -36,6 +40,7 @@ public final class AudioEngine {
 
     public void stop() {
         running = false;
+        recorder.stop();
     }
 
     /** Hält die Aufnahme auch ohne globale Soundreaktion an, weil eine Ebene sie braucht. */
@@ -61,7 +66,7 @@ public final class AudioEngine {
     private void run() {
         while (running) {
             Project.Audio cfg = settings.get();
-            if (!cfg.enabled && !forced) {
+            if (!cfg.enabled && !forced && !recorder.active()) {
                 status = "Soundreaktion aus";
                 values = new double[4];
                 sleep(150);
@@ -76,7 +81,7 @@ public final class AudioEngine {
                 ArrayList<float[]> packets = new ArrayList<>();
                 while (running && !restart) {
                     Project.Audio now = settings.get();
-                    if ((!now.enabled && !forced) || !now.device.equals(device)) break;
+                    if ((!now.enabled && !forced && !recorder.active()) || !now.device.equals(device)) break;
                     packets.clear();
                     capture.read(packets);
                     if (packets.isEmpty()) {
@@ -91,8 +96,16 @@ public final class AudioEngine {
                             filled += n;
                             off += n;
                             if (filled == window.length) {
-                                values = analyse(window, capture.channels, capture.rate);
-                                stamp = System.nanoTime() / 1e9;
+                                double[] v = analyse(window, capture.channels, capture.rate);
+                                double at = System.nanoTime() / 1e9;
+                                values = v;
+                                stamp = at;
+                                try {
+                                    analyzer.feed(v, at, BLOCK / 2.0 / capture.rate);
+                                    recorder.record(v, at, BLOCK / 2.0 / capture.rate, analyzer);
+                                } catch (RuntimeException e) {
+                                    LOG.log(Level.WARNING, "Musik-Analyse", e);
+                                }
                                 // Halb überlappend weiter: doppelt so viele Messungen, Beats werden schneller erkannt.
                                 int half = window.length / 2;
                                 System.arraycopy(window, half, window, 0, half);

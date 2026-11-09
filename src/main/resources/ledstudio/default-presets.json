@@ -20,6 +20,8 @@
   {"name": "Matrix-Regen", "effect": "matrix_rain", "params": {}},
   {"name": "Farbverlauf", "effect": "gradient_flow", "params": {}},
   {"name": "Farbrad", "effect": "color_wheel", "params": {}},
+  {"name": "Musik: Auto-Regie", "effect": "music", "params": {"mode": "Auto-Regie"}},
+  {"name": "Auto-Regie Vorführung (ohne Ton)", "effect": "music", "params": {"mode": "Auto-Regie", "trigger": "bpm", "bpm": 124}},
   {"name": "Pulsringe", "effect": "pulse_rings", "params": {}},
   {"name": "Pulsringe je Lüfter", "effect": "pulse_rings", "params": {"origin": "fixture", "bpm": 110, "palette": "Cyan", "duration": 0.9}},
   {"name": "Herzschlag", "effect": "heartbeat", "params": {"hue": 0.97}},

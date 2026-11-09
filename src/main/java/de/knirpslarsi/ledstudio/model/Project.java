@@ -89,8 +89,13 @@ public class Project {
         public String colorMode = "off";
         public String color1 = "#A020FF", color2 = "#00DDFF", color3 = "#FF2080";
         public boolean useColor3;
+        /** Musikreaktion: Quelle ("off" oder eine SoundSource-id, ältere Versionen: Gesamt/Bass/Mitten/Höhen). */
         public String audioBand = "off";
-        public double audioAmount = 1;
+        /** Was die Musik verändert: Helligkeit (audioAmount), Tempo, Farbton, Sättigung, Aufblitzen. */
+        public double audioAmount = 1, audioSpeed = 0, audioHue = 0, audioSat = 0, audioFlash = 0;
+        /** Signal: eigener Bereich (Hz), Schwelle, Kontrast, Verstärkung, Anstieg und Abfall (ms). */
+        public double audioFrom = 200, audioTo = 2000, audioThreshold = 0.1, audioContrast = 1.6, audioBoost = 1,
+                audioAttack = 25, audioRelease = 180;
 
         public Layer copy() {
             Layer c = GSON.fromJson(GSON.toJson(this), Layer.class);
@@ -102,7 +107,7 @@ public class Project {
     public static class Audio {
         public boolean enabled;
         public String device = "default";
-        public String mode = "Beat-Balken";
+        public String mode = "Auto-Regie";
         public double gain = 4.0, smoothing = 0.75, floor = 0.02, minimum = 0.0, duration = 0.8, pause = 0.1, length = 1.2;
         public String band = "Bass";
         public String palette = "Lila";
@@ -114,6 +119,19 @@ public class Project {
         public double bpm = 120;
         /** Ursprung der Ringe: "center" oder "fixture". */
         public String origin = "center";
+        /** Auto-Regie: wie stark leise Stellen die LEDs abdunkeln (0 = immer volle Helligkeit). */
+        public double dynamics = 0.9;
+        /** Wie die Streifen-Effekte auf die LEDs gelegt werden: "auto", "chain", "fixture" oder "x". */
+        public String spread = "auto";
+        /** Worauf die drei Kanäle der Musik-Effekte reagieren (siehe SoundSource). */
+        public String react1 = "bass", react2 = "voice", react3 = "high";
+        /** Eigener Frequenzbereich und Bereich der Spektrum-Welle in Hz. */
+        public double fromHz = 200, toHz = 2000, specFrom = 40, specTo = 16000;
+        /** Signal: Verstärkung, Schwelle (0..1), Kontrast (Exponent), Anstieg und Abfall in ms. */
+        public double boost = 1, threshold = 0.1, contrast = 1.6, attackMs = 25, releaseMs = 180;
+        /** Aussehen: zur Mitte spiegeln, Richtung umkehren, Weichzeichnen (0..4), Hintergrund, Fluss-Tempo, Nachleuchten. */
+        public boolean mirror = true, reverse;
+        public double blur = 1, background = 0, flowSpeed = 1, afterglow = 1;
     }
 
     public String current = "Lila Balken";
@@ -130,6 +148,8 @@ public class Project {
     public boolean closeToTray;
     public boolean autoUpdate = true;
     public List<Preset> presets = new ArrayList<>();
+    /** Namen der mitgelieferten Vorlagen, die schon angeboten wurden. Neue kommen bei einem Update dazu. */
+    public List<String> offeredDefaults;
     public Audio audio = new Audio();
     public List<Fixture> fixtures = new ArrayList<>();
 
@@ -155,6 +175,23 @@ public class Project {
         }
     }
 
+    /** Vorlagen, die erst nach 1.1.0 mitgeliefert wurden; ältere Installationen bekommen sie einmal dazu. */
+    private static final java.util.Set<String> ADDED_LATER = java.util.Set.of("Pulsringe", "Pulsringe je Lüfter",
+            "Musik: Auto-Regie", "Auto-Regie Vorführung (ohne Ton)");
+
+    /** Hängt mitgelieferte Vorlagen an, die noch nie angeboten wurden. Gelöschte kommen nicht wieder. */
+    public void addNewDefaultPresets(List<Preset> defaults) {
+        if (offeredDefaults == null) {
+            offeredDefaults = new ArrayList<>();
+            for (Preset d : defaults) if (!ADDED_LATER.contains(d.name)) offeredDefaults.add(d.name);
+        }
+        for (Preset d : defaults) {
+            if (offeredDefaults.contains(d.name)) continue;
+            offeredDefaults.add(d.name);
+            if (preset(d.name) == null) presets.add(d);
+        }
+    }
+
     public static Project load() {
         Path file = AppPaths.projectFile();
         Project p = null;
@@ -171,6 +208,7 @@ public class Project {
         }
         if (p == null) p = new Project();
         if (p.presets == null || p.presets.isEmpty()) p.presets = defaultPresets();
+        p.addNewDefaultPresets(defaultPresets());
         if (p.audio == null) p.audio = new Audio();
         if (p.fixtures == null) p.fixtures = new ArrayList<>();
         return p;

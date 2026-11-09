@@ -23,6 +23,8 @@ public abstract class Effect {
         /** Rohpegel (Gesamt, Bass, Mitten, Höhen), Zeitstempel und jetzige Zeit in Sekunden. */
         public double[] audio = new double[4];
         public double audioStamp, now;
+        /** Musik-Analyse (Tempo, Spannung, Drops, einzelne Klänge), kann null sein. */
+        public de.knirpslarsi.ledstudio.audio.MusicAnalyzer analysis;
     }
 
     public abstract String id();

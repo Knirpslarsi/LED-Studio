@@ -39,7 +39,7 @@ Pro Ebene einstellbar (**Feinschliff**):
 - **Farbe:** Farben des Effekts durch eine Farbe oder einen Verlauf ersetzen, Farbton, Sättigung, Helligkeit, Gamma
 - **Zeit:** eigenes Tempo, Versatz, Nachleuchten
 - **Bereich:** Effekt nur über das Ziel oder über den ganzen Aufbau, nur Rand-LEDs oder nur jede zweite LED, Laufrichtung, spiegeln, drehen, Muster-Größe
-- **Musik:** Helligkeit folgt Bass, Mitten, Höhen oder Gesamtpegel
+- **Musikreaktion:** Jede Ebene kann auf Musik reagieren, auf dieselben Quellen wie die Musik-Effekte (Bass, tiefe Töne, Stimmen, Mitten, hohe Töne, Becken, Gesamtlautstärke, erkannte Kicks, Snares, Hi-Hats, Melodie oder einen eigenen Hz-Bereich). Die Musik kann Helligkeit, Tempo, Farbton und Sättigung verändern und helle Stellen weiß aufblitzen lassen, jeweils mit eigener Stärke. Dazu Verstärkung, Schwelle, Kontrast, Anstieg und Abfall sowie eine Anzeige, wie stark die Ebene gerade ausschlägt.
 
 **Solo** zeigt beim Einstellen nur eine Ebene. Jeder Reglerwert lässt sich auch eintippen, auch über die Grenzen des Reglers hinaus.
 
@@ -49,6 +49,18 @@ Effekte: Rotor, Vortex, Pulsringe, Plasma, Aurora, Wellenringe, Meteorregen, Rad
 
 **Musik:** Für alle Geräte auf der Seite **Musik** oder pro Gerät als Ebene mit dem Effekt **Musik-Animation**. Jeder erkannte Beat startet einen eigenen Lauf, Läufe überlagern sich, es geht kein Beat verloren. Die Beat-Empfindlichkeit ist einstellbar.
 
+- **Auto-Regie (Standard):** LED Studio analysiert den Song selbst und stimmt die Lichtshow darauf ab:
+  - Es erkennt Tempo und Takt. Das Licht läuft im Takt, auch wenn einmal ein Schlag fehlt.
+  - Die Effekte arbeiten wie bei Musik-Visualisierern (z. B. LedFx) auf einem virtuellen LED-Streifen: Das Spektrum wird in Bänder zerlegt, jedes steigt schnell an und fällt weich ab. Daraus entstehen Energie (Bass, Mitten, Höhen wachsen von der Mitte), Fluss (die Farbe des Moments wandert nach außen), Spektrum-Welle, Power (Bass füllt, Hi-Hats sprühen Funken), Regen, Pegel, Takt-Balken und Farbblöcke. Die Auto-Regie wählt je Song-Teil passende Effekte und wechselt alle 8 Takte; im Drop laufen zwei zusammen. Jeder Effekt lässt sich auch einzeln wählen.
+  - **Worauf reagiert der Effekt?** Drei Kanäle, jeder frei wählbar: Bass, tiefe Töne, Stimmen/Gesang, Mitten, hohe Töne, Becken, Gesamtlautstärke, erkannte Kicks, Snares, Hi-Hats, Melodie oder ein eigener Bereich in Hz. Energie zeigt alle drei als Balken, Fluss als Farben, Power füllt mit Kanal 1 und sprüht Funken bei Kanal 2 und 3, Regen lässt je Kanal eigene Tropfen fallen. Die Spektrum-Welle zeigt einen wählbaren Frequenzbereich.
+  - **Signal:** Verstärkung, Schwelle, Kontrast, Anstieg und Abfall in Millisekunden, Empfindlichkeit der Erkennung.
+  - **Aussehen:** Farbverlauf (z. B. Tanzfläche, Plasma, Ozean, Neon, Sonnenuntergang), umkehren, zur Mitte spiegeln, Verteilung (entlang der Kette, jeder Lüfter für sich, links nach rechts), Weichzeichnen, Hintergrundleuchten, Geschwindigkeit, Nachleuchten, leise Stellen dunkler.
+  - Die Effekt-Einstellungen sind in Abschnitte gegliedert und zeigen nur, was zur gewählten Animation passt.
+  - Die Helligkeit folgt der echten Lautstärke: Leise Stellen wie ein ruhiges Intro bleiben dunkel und ruhig (Regler „Leise Stellen dunkler“).
+  - Es unterscheidet Kick, Snare, Hi-Hats und kleine Neben-Sounds. Effekte wie Power und Regen reagieren auf jeden dieser Klänge einzeln.
+  - Baut sich Spannung auf (Riser, Snare-Wirbel, kein Bass mehr), baut auch das Licht Spannung auf: Der Pegel füllt sich, alles läuft schneller, die Farben werden weißer, am Ende blitzt es im Takt.
+  - Im Drop entlädt sich alles in einem Lichtblitz, danach laufen zwei Effekte zusammen.
+  - Die Seite **Musik** zeigt, was die Analyse gerade hört. Die Vorlage **Auto-Regie Vorführung** spielt einen Beispielsong ganz ohne Ton ab.
 - **Auf Beats:** Beat-Balken, Bass-Komet, Doppelwelle, Fan-Kaskade, Regenbogenlauf, Beat-Ringe (aus der Mitte oder aus jedem Bauteil)
 - **Drei-Band-Beats:** Bass schickt Ringe aus der Mitte, Mitten eine Welle quer über den Aufbau, Höhen einen Funkenregen, jeder Bereich in eigener Farbe
 - **Nach Frequenzen:** Equalizer mit 16 Bändern (tief links, hoch rechts, Füllung von unten), Frequenz-Zonen (Bass, Mitten, Höhen je ein Drittel der Kette), Bass-Pumpe mit Höhen-Funken, Tonhöhen-Farbe, Spektrum-Ringe, VU-Meter, Puls
