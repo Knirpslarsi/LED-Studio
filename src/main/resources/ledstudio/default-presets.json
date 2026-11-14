@@ -24,6 +24,7 @@
   {"name": "Auto-Regie Vorführung (ohne Ton)", "effect": "music", "params": {"mode": "Auto-Regie", "trigger": "bpm", "bpm": 124}},
   {"name": "Pulsringe", "effect": "pulse_rings", "params": {}},
   {"name": "Pulsringe je Lüfter", "effect": "pulse_rings", "params": {"origin": "fixture", "bpm": 110, "palette": "Cyan", "duration": 0.9}},
+  {"name": "Zufalls-Blinken", "effect": "random_blink", "params": {"color_mode": "two"}},
   {"name": "Herzschlag", "effect": "heartbeat", "params": {"hue": 0.97}},
   {"name": "Feuer", "effect": "fire", "params": {}},
   {"name": "Regenbogen", "effect": "rainbow", "params": {}},

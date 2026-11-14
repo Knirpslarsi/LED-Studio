@@ -70,6 +70,23 @@ Quelle ist der PC-Sound oder ein Mikrofon. Audio wird nur lokal ausgewertet, nie
 
 **Eigene Effekte:** JavaScript-Dateien im Effekt-Ordner, siehe [docs/beispiel-effekt.js](docs/beispiel-effekt.js).
 
+## Show (Timecode)
+
+Auf der Seite **Show** baust du eine Lichtshow passend zu einem Song, bis auf jede einzelne LED genau.
+
+- **Song laden:** MP3 oder WAV. LED Studio zeigt die Wellenform, erkennt Tempo, Beats und Song-Teile (Aufbau, Drop, ruhig) und blendet sie als Raster ein.
+- **Spuren:** Jede Spur hat ein Ziel: alles, Geräte, Lüfter oder einzelne LEDs (Klick auf eine LED, Umschalt+Klick für den ganzen Lüfter). **Eine Spur je LED** oder **je Lüfter** legt sie mit einem Klick an. Obere Spuren liegen über unteren.
+- **Clips:** Doppelklick in eine Spur legt einen Clip an. Clips lassen sich verschieben und in der Länge ziehen und rasten an Beats ein (Alt: ohne Einrasten). Jeder Clip zeigt eine feste Farbe oder einen beliebigen Effekt mit allen Einstellungen, dazu Ein- und Ausblenden, Helligkeit, Tempo und Mischen.
+- **Live einspielen:** Mit „Aufnehmen mit Tasten 1–9“ legen die Zifferntasten beim Abspielen Clips auf den ersten neun Spuren an, so lange die Taste gedrückt ist.
+- **Speichern:** als `.ledshow`-Datei (Standardordner `%APPDATA%\LEDStudio\shows`). Die zuletzt bearbeitete Show öffnet sich beim Start wieder. Rückgängig mit Strg+Z.
+- Ohne Song läuft die Show mit einer festen Länge.
+
+Während die Show läuft oder die Seite mit „Auf den LEDs zeigen“ offen ist, steuert sie die LEDs anstelle der Vorlage.
+
+## Hilfe
+
+Unten in der Seitenleiste: [Anleitung und Downloads](https://github.com/Knirpslarsi/LED-Studio), [Discord](https://discord.gg/hHunMTsjfT) und E-Mail an support@knirpslarsi.de. Dort lassen sich auch die Diagnose kopieren und die Logdatei öffnen.
+
 ## Umstieg von der alten Python-Version
 
 1. Das alte LED Studio im Tray beenden. Beide zusammen würden die LEDs flackern lassen.
@@ -107,4 +124,4 @@ git tag v1.2.3 && git push origin v1.2.3
 
 ## Verwendete Bibliotheken
 
-OpenJFX (GPLv2 + Classpath Exception), Gson (Apache 2.0), JNA (Apache 2.0 / LGPL), Mozilla Rhino (MPL 2.0). LED Studio ist kein offizielles OpenRGB-Projekt und spricht nur dessen SDK-Protokoll.
+OpenJFX (GPLv2 + Classpath Exception), Gson (Apache 2.0), JNA (Apache 2.0 / LGPL), Mozilla Rhino (MPL 2.0), JLayer (LGPL 2.1, MP3-Dekodierung). LED Studio ist kein offizielles OpenRGB-Projekt und spricht nur dessen SDK-Protokoll.

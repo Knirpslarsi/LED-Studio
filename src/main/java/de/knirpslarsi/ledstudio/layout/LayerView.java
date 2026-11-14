@@ -23,12 +23,15 @@ public final class LayerView {
 
     public static LayerView build(CompiledLayout parent, List<Fixture> fixtures, Project.Layer layer) {
         Set<String> ids = Targets.resolve(layer.targets, fixtures);
+        Set<String> single = Targets.leds(layer.targets);
         List<Led> chosen = new ArrayList<>();
         List<Integer> global = new ArrayList<>();
         Map<Integer, Integer> chainIndex = new HashMap<>();
         for (int i = 0; i < parent.leds.length; i++) {
             Led l = parent.leds[i];
-            if (l.fixture >= fixtures.size() || !ids.contains(fixtures.get(l.fixture).id) || !passes(layer.ledFilter, l)) continue;
+            if (l.fixture >= fixtures.size() || !passes(layer.ledFilter, l)) continue;
+            String fid = fixtures.get(l.fixture).id;
+            if (!ids.contains(fid) && !single.contains(fid + "#" + l.k)) continue;
             Led c = l.copy();
             c.fixture = chainIndex.computeIfAbsent(l.fixture, f -> chainIndex.size());
             chosen.add(c);

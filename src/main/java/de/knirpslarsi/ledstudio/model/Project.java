@@ -84,6 +84,9 @@ public class Project {
         public String blend = "normal";
         public double opacity = 1, brightness = 1, saturation = 1, hueShift = 0, gamma = 1, speed = 1, phase = 0, trail = 0;
         public double rotate = 0, scale = 1;
+        /** Tempo, das sich ändert: Form (siehe SpeedCurve), langsamstes und schnellstes Tempo, Dauer eines Wechsels. */
+        public String speedMode = "off";
+        public double speedMin = 0.3, speedMax = 2.5, speedPeriod = 4;
         public boolean mirrorX, mirrorY, reverse;
         public String ledFilter = "all";
         public String colorMode = "off";
@@ -96,6 +99,14 @@ public class Project {
         /** Signal: eigener Bereich (Hz), Schwelle, Kontrast, Verstärkung, Anstieg und Abfall (ms). */
         public double audioFrom = 200, audioTo = 2000, audioThreshold = 0.1, audioContrast = 1.6, audioBoost = 1,
                 audioAttack = 25, audioRelease = 180;
+
+        /** Ebene mit einer festen Farbe. */
+        public static Layer solid(String hex) {
+            Layer l = new Layer();
+            l.effect = "static";
+            l.params = new LinkedHashMap<>(Map.of("use_color", 1, "color", hex));
+            return l;
+        }
 
         public Layer copy() {
             Layer c = GSON.fromJson(GSON.toJson(this), Layer.class);
@@ -135,6 +146,10 @@ public class Project {
     }
 
     public String current = "Lila Balken";
+    /** Zuletzt bearbeitete Show (Pfad), wird beim Start wieder geöffnet. */
+    public String lastShow = "";
+    /** Lautstärke beim Abspielen einer Show, 0..1. */
+    public double showVolume = 0.8;
     public double speed = 1.0, brightness = 1.0, trail = 0.0;
     /** Übergangszeit jeder LED in Millisekunden. */
     public double smoothMs = 70;
@@ -177,7 +192,7 @@ public class Project {
 
     /** Vorlagen, die erst nach 1.1.0 mitgeliefert wurden; ältere Installationen bekommen sie einmal dazu. */
     private static final java.util.Set<String> ADDED_LATER = java.util.Set.of("Pulsringe", "Pulsringe je Lüfter",
-            "Musik: Auto-Regie", "Auto-Regie Vorführung (ohne Ton)");
+            "Musik: Auto-Regie", "Auto-Regie Vorführung (ohne Ton)", "Zufalls-Blinken");
 
     /** Hängt mitgelieferte Vorlagen an, die noch nie angeboten wurden. Gelöschte kommen nicht wieder. */
     public void addNewDefaultPresets(List<Preset> defaults) {

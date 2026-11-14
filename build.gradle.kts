@@ -18,6 +18,8 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.15.0")
     implementation("net.java.dev.jna:jna-platform:5.15.0")
     implementation("org.mozilla:rhino:1.7.15")
+    // MP3 dekodieren für die Show-Zeitleiste (LGPL)
+    implementation("javazoom:jlayer:1.0.1")
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

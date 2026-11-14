@@ -109,3 +109,9 @@
 .layer-row.selected { -fx-background-color: #3d2d63; }
 .target-indent-1 { -fx-padding: 0 0 0 18; }
 .target-indent-2 { -fx-padding: 0 0 0 36; }
+
+/* Hilfe */
+.button.help-link { -fx-background-color: -panel; -fx-border-color: -panel2; -fx-border-radius: 10; -fx-background-radius: 10; -fx-padding: 14 16; -fx-alignment: center-left; }
+.button.help-link:hover { -fx-background-color: -panel2; -fx-border-color: #4a4a5c; }
+.help-title { -fx-font-size: 14.5px; -fx-font-weight: bold; -fx-text-fill: -fg; }
+.help-icon { -fx-fill: transparent; -fx-stroke: -accent; -fx-stroke-width: 1.7; -fx-scale-x: 1.2; -fx-scale-y: 1.2; }

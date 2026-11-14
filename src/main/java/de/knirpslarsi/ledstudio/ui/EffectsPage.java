@@ -691,6 +691,8 @@ final class EffectsPage extends SplitPane {
                 Ui.slider("Weichheit (Gamma)", 0.2, 4, l.gamma, 0.05, v -> fine(() -> l.gamma = v)),
                 Ui.section("Zeit"),
                 Ui.slider("Tempo dieser Ebene", 0, 5, l.speed, 0.01, v -> fine(() -> l.speed = v)),
+                SpeedControls.build(l, false, () -> fine(() -> {
+                })),
                 Ui.slider("Versatz (Sekunden)", 0, 30, l.phase, 0.05, v -> fine(() -> l.phase = v)),
                 Ui.slider("Nachleuchten", 0, 2, l.trail, 0.01, v -> fine(() -> l.trail = v)),
                 Ui.section("Bereich und Richtung"),
@@ -743,6 +745,10 @@ final class EffectsPage extends SplitPane {
         l.mirrorY = d.mirrorY;
         l.rotate = d.rotate;
         l.scale = d.scale;
+        l.speedMode = d.speedMode;
+        l.speedMin = d.speedMin;
+        l.speedMax = d.speedMax;
+        l.speedPeriod = d.speedPeriod;
         l.audioBand = d.audioBand;
         l.audioAmount = d.audioAmount;
         l.audioSpeed = d.audioSpeed;

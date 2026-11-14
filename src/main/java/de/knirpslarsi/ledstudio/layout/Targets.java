@@ -32,6 +32,19 @@ public final class Targets {
         return "fixture:" + id;
     }
 
+    /** Eine einzelne LED: Bauteil und Index der LED darin. */
+    public static String led(String fixtureId, int k) {
+        return "led:" + fixtureId + "#" + k;
+    }
+
+    /** Einzelne LEDs im Ziel als "bauteil#index". */
+    public static Set<String> leds(List<String> targets) {
+        Set<String> out = new HashSet<>();
+        if (targets == null) return out;
+        for (String t : targets) if (t.startsWith("led:")) out.add(t.substring(4));
+        return out;
+    }
+
     /** Die IDs aller Bauteile, die zum Ziel gehören. */
     public static Set<String> resolve(List<String> targets, List<Fixture> fixtures) {
         Set<String> out = new LinkedHashSet<>();
@@ -82,4 +95,37 @@ public final class Targets {
         });
         return out;
     }
+
+    /** Schaltet eine LED (oder mit whole das ganze Bauteil) um und gibt die neue Zielliste zurück. */
+    public static List<String> toggleLed(List<String> targets, List<Fixture> fx, CompiledLayout lay, CompiledLayout.Led hit, boolean whole) {
+        Set<String> fixtureIds = new LinkedHashSet<>(resolve(targets, fx));
+        Set<String> leds = new LinkedHashSet<>(leds(targets));
+        String id = fx.get(hit.fixture).id;
+        List<Integer> ks = new ArrayList<>();
+        for (CompiledLayout.Led l : lay.leds) if (l.fixture == hit.fixture && !ks.contains(l.k)) ks.add(l.k);
+        if (whole) {
+            boolean on = fixtureIds.contains(id);
+            leds.removeIf(s -> s.startsWith(id + "#"));
+            if (on) fixtureIds.remove(id);
+            else fixtureIds.add(id);
+        } else if (fixtureIds.contains(id)) {
+            // Aus einem ganzen Bauteil eine LED herausnehmen: die übrigen einzeln behalten.
+            fixtureIds.remove(id);
+            for (int k : ks) if (k != hit.k) leds.add(id + "#" + k);
+        } else if (!leds.remove(id + "#" + hit.k)) {
+            leds.add(id + "#" + hit.k);
+            if (ks.stream().allMatch(k -> leds.contains(id + "#" + k))) {
+                leds.removeIf(s -> s.startsWith(id + "#"));
+                fixtureIds.add(id);
+            }
+        }
+        List<String> out = new ArrayList<>();
+        boolean all = fx.stream().allMatch(f -> fixtureIds.contains(f.id));
+        if (all && leds.isEmpty()) return out;
+        for (Fixture f : fx) if (fixtureIds.contains(f.id)) out.add(fixture(f.id));
+        for (String l : leds) out.add("led:" + l);
+        if (out.isEmpty()) out.add(NONE);
+        return out;
+    }
+
 }

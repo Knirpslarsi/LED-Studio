@@ -71,7 +71,9 @@ public final class LedStudioApp extends Application {
         pages.put("Effekte", effectsPage);
         pages.put("Layout", new LayoutPage(core));
         pages.put("Musik", new MusicPage(core));
+        pages.put("Show", new ShowPage(core));
         pages.put("Einstellungen", new SettingsPage(core, updates, () -> effectsPage.externalChange()));
+        pages.put("Hilfe", new HelpPage(core));
         pages.values().forEach(p -> {
             p.setVisible(false);
             content.getChildren().add(p);
@@ -138,6 +140,7 @@ public final class LedStudioApp extends Application {
         Label logo = Ui.label("LED Studio", "logo");
         ToggleGroup group = new ToggleGroup();
         VBox box = new VBox(4, logo);
+        ToggleButton help = null;
         for (String name : pages.keySet()) {
             ToggleButton b = new ToggleButton(name);
             b.getStyleClass().add("nav-button");
@@ -145,7 +148,9 @@ public final class LedStudioApp extends Application {
             b.setMaxWidth(Double.MAX_VALUE);
             b.setOnAction(e -> showPage(name));
             navButtons.put(name, b);
-            box.getChildren().add(b);
+            // Hilfe steht wie in Voxa ganz unten.
+            if ("Hilfe".equals(name)) help = b;
+            else box.getChildren().add(b);
         }
         Label status = Ui.label(core.connection.status(), "muted");
         status.setWrapText(true);
@@ -156,6 +161,7 @@ public final class LedStudioApp extends Application {
         oldVersionWarning.setVisible(false);
         oldVersionWarning.setManaged(false);
         box.getChildren().addAll(Ui.grow(), oldVersionWarning, status);
+        if (help != null) box.getChildren().add(help);
         box.getStyleClass().add("nav");
         return box;
     }
@@ -289,6 +295,7 @@ public final class LedStudioApp extends Application {
             java.util.List<String> names = new java.util.ArrayList<>(pages.keySet());
             names.add("Feinschliff");
             names.add("Musikreaktion");
+            if (pages.get("Show") instanceof ShowPage show) show.demo();
             names.add("Musik-Ebene");
             shoot(dir, names.toArray(new String[0]), 0);
         });
@@ -312,6 +319,7 @@ public final class LedStudioApp extends Application {
         // Zeigt im Feinschliff die Musikreaktion einer normalen Ebene.
         scene.layers.get(0).audioBand = "voice";
         scene.layers.get(0).audioFlash = 0.4;
+        scene.layers.get(0).speedMode = "wave";
         core.project.presets.add(0, scene);
         core.selectPreset(scene.name);
     }

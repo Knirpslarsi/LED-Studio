@@ -21,6 +21,7 @@ public final class Effects {
         add(LegacyEffects.Wave::new);
         add(LegacyEffects.Fire::new);
         add(LegacyEffects.Static::new);
+        add(RandomBlink::new);
         add(LegacyEffects.CounterWave::new);
         add(MusicEffect::new);
         add(MusicEffect.PulseRings::new);

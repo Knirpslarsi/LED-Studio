@@ -11,6 +11,8 @@ import de.knirpslarsi.ledstudio.effects.Params;
 import de.knirpslarsi.ledstudio.layout.CompiledLayout;
 import de.knirpslarsi.ledstudio.layout.LayerView;
 import de.knirpslarsi.ledstudio.model.Project;
+import de.knirpslarsi.ledstudio.model.Show;
+import de.knirpslarsi.ledstudio.model.SpeedCurve;
 import de.knirpslarsi.ledstudio.openrgb.LedBackend;
 import de.knirpslarsi.ledstudio.util.Colors;
 
@@ -24,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
+import java.util.function.DoubleSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -48,6 +51,10 @@ public final class Engine {
         final SoundChannel sound = new SoundChannel();
         String signature = "";
         volatile boolean resetPending = true;
+        /** Show: Zeit im Clip beim letzten Bild, NaN wenn der Clip nicht lief. */
+        double lastLocal = Double.NaN;
+        /** Show mit Tempo-Verlauf: bis curveAt gelaufene Effektzeit (curveSum). */
+        double curveAt = Double.NaN, curveSum;
 
         Runtime(Effect effect) {
             this.effect = effect;
@@ -65,6 +72,8 @@ public final class Engine {
         /** Musikreaktion der Ebene, null wenn aus. */
         SoundChannel.Settings sound;
         int[] out;
+        /** Show: der Clip, zu dem diese Ebene gehört; null bei normalen Ebenen. */
+        Show.Clip clip;
     }
 
     /** Alles, was die Oberfläche auf einmal austauscht. */
@@ -77,6 +86,8 @@ public final class Engine {
         boolean off;
         /** Geräte (Index in layout.devices), die eine aktive Ebene berührt. */
         boolean[] covered;
+        /** Show läuft: Uhr in Sekunden, sonst null. */
+        DoubleSupplier clock;
     }
 
     private static final Map<String, Double> COLOR_HUES = new HashMap<>();
@@ -95,6 +106,10 @@ public final class Engine {
     public static final String[] GLOBAL_COLORS = {"preset", "Lila", "Blau", "Cyan", "Grün", "Gelb", "Orange", "Rot", "Pink", "Regenbogen"};
 
     private volatile State state;
+    private volatile Show show;
+    private volatile DoubleSupplier showClock;
+    private Project lastProject;
+    private CompiledLayout lastLayout;
     private volatile LedBackend backend;
     private volatile boolean running;
     private Thread thread;
@@ -197,10 +212,37 @@ public final class Engine {
         s.gain = project.audio.gain;
         s.floor = project.audio.floor;
         s.covered = new boolean[layout.devices.size()];
-        Project.Preset preset = Project.OFF.equals(project.current) ? null : project.preset(project.current);
-        s.off = preset == null;
+        lastProject = project;
+        lastLayout = layout;
+        Show currentShow = show;
+        boolean showMode = currentShow != null && showClock != null;
+        s.clock = showMode ? showClock : null;
+        Project.Preset preset = showMode || Project.OFF.equals(project.current) ? null : project.preset(project.current);
+        s.off = preset == null && !showMode;
         boolean needsAudio = false;
         Map<String, Runtime> alive = new HashMap<>();
+        if (showMode) {
+            // Erste Spur liegt obenauf, also von unten anfangen.
+            for (int ti = currentShow.tracks.size() - 1; ti >= 0; ti--) {
+                Show.Track track = currentShow.tracks.get(ti);
+                for (Show.Clip clip : track.clips) {
+                    Project.Layer l = clip.look;
+                    l.targets = new ArrayList<>(clip.targetsIn(track));
+                    Runtime old = runtimes.get(clip.id);
+                    Runtime rt = old != null && old.effect.id().equals(l.effect) ? old : null;
+                    if (rt == null) {
+                        Effect e = Effects.create(l.effect);
+                        if (e == null) continue;
+                        rt = new Runtime(e);
+                    }
+                    alive.put(clip.id, rt);
+                    if (track.mute || !l.enabled) continue;
+                    Run run = buildRun(l, clip.id, rt, project, layout, s);
+                    run.clip = clip;
+                    needsAudio |= rt.effect.needsAudio() || !"off".equals(l.audioBand);
+                }
+            }
+        }
         if (preset != null) {
             List<Project.Layer> layers = preset.layers();
             // Unten anfangen: Die erste Ebene der Liste liegt obenauf.
@@ -215,38 +257,58 @@ public final class Engine {
                 }
                 alive.put(l.id, rt);
                 if (!l.enabled) continue;
-                Run run = new Run();
-                run.layer = l;
-                run.id = l.id;
-                run.runtime = rt;
-                run.view = LayerView.build(layout, project.fixtures, l);
-                run.params = new Params(rt.effect.params(), l.params);
-                run.sound = soundSettings(l, project.audio);
-                if (run.params.has("speed")) {
-                    // Effekte rechnen t * Tempo. Bei 0 ginge die Position verloren, deshalb bleibt ein winziger Rest.
-                    double speed = run.params.d("speed");
-                    if (Math.abs(speed) < MIN_EFFECT_SPEED) run.params.set("speed", speed < 0 ? -MIN_EFFECT_SPEED : MIN_EFFECT_SPEED);
-                }
-                applyGlobalColor(project.color, run.params);
-                run.stops = LayerFx.stops(l);
-                run.out = new int[run.view.toGlobal.length];
-                String signature = System.identityHashCode(layout) + "|" + l.targets + "|" + l.ledFilter + "|" + l.scope;
-                if (!signature.equals(rt.signature)) {
-                    rt.signature = signature;
-                    rt.resetPending = true;
-                }
-                s.runs.add(run);
+                buildRun(l, l.id, rt, project, layout, s);
                 needsAudio |= rt.effect.needsAudio() || !"off".equals(l.audioBand);
-                for (int g : run.view.toGlobal) {
-                    int device = layout.leds[g].device;
-                    if (device >= 0) s.covered[device] = true;
-                }
             }
         }
         runtimes.keySet().retainAll(alive.keySet());
         runtimes.putAll(alive);
         audio.setForced(needsAudio);
         state = s;
+    }
+
+    private Run buildRun(Project.Layer l, String id, Runtime rt, Project project, CompiledLayout layout, State s) {
+        Run run = new Run();
+        run.layer = l;
+        run.id = id;
+        run.runtime = rt;
+        run.view = LayerView.build(layout, project.fixtures, l);
+        run.params = new Params(rt.effect.params(), l.params);
+        run.sound = soundSettings(l, project.audio);
+        if (run.params.has("speed")) {
+            // Effekte rechnen t * Tempo. Bei 0 ginge die Position verloren, deshalb bleibt ein winziger Rest.
+            double speed = run.params.d("speed");
+            if (Math.abs(speed) < MIN_EFFECT_SPEED) run.params.set("speed", speed < 0 ? -MIN_EFFECT_SPEED : MIN_EFFECT_SPEED);
+        }
+        applyGlobalColor(project.color, run.params);
+        run.stops = LayerFx.stops(l);
+        run.out = new int[run.view.toGlobal.length];
+        String signature = System.identityHashCode(layout) + "|" + l.targets + "|" + l.ledFilter + "|" + l.scope;
+        if (!signature.equals(rt.signature)) {
+            rt.signature = signature;
+            rt.resetPending = true;
+        }
+        s.runs.add(run);
+        for (int g : run.view.toGlobal) {
+            int device = layout.leds[g].device;
+            if (device >= 0) s.covered[device] = true;
+        }
+        return run;
+    }
+
+    /**
+     * Show zum Abspielen. Mit clock läuft sie (Sekunden im Song) und ersetzt die Vorlage; clock null beendet die
+     * Show-Ausgabe. Nach Änderungen an der Show erneut aufrufen.
+     */
+    public synchronized void setShow(Show show, DoubleSupplier clock) {
+        this.show = show;
+        this.showClock = clock;
+        if (lastProject != null && lastLayout != null) apply(lastProject, lastLayout);
+    }
+
+    public boolean showActive() {
+        State s = state;
+        return s != null && s.clock != null;
     }
 
     private static SoundChannel.Settings soundSettings(Project.Layer l, Project.Audio audio) {
@@ -313,11 +375,21 @@ public final class Engine {
             if (eventSeq == Long.MIN_VALUE) eventSeq = audio.analyzer.latestSeq();
             eventSeq = audio.analyzer.poll(eventSeq, frameEvents);
             String soloId = solo;
+            double showTime = s.clock != null ? s.clock.getAsDouble() : Double.NaN;
             for (Run run : s.runs) {
                 if (soloId != null && !soloId.equals(run.id)) continue;
-                renderLayer(run, s, frame, dt, (now - startNanos) / 1e9, seconds, values, stamp, out);
+                if (run.clip != null) {
+                    double env = run.clip.envelope(showTime);
+                    if (env <= 0) {
+                        run.runtime.lastLocal = Double.NaN;
+                        continue;
+                    }
+                    renderLayer(run, s, frame, dt, (now - startNanos) / 1e9, seconds, values, stamp, out, showTime - run.clip.start, env);
+                } else {
+                    renderLayer(run, s, frame, dt, (now - startNanos) / 1e9, seconds, values, stamp, out, Double.NaN, 1);
+                }
             }
-            if (s.audio.enabled && !s.off) music.render(s.layout, seconds, values, stamp, s.audio, out);
+            if (s.audio.enabled && !s.off && s.clock == null) music.render(s.layout, seconds, values, stamp, s.audio, out);
             post(s, out, trail, dt);
             smooth.apply(out, dt, s.smoothSeconds);
             Set<Integer> id = identify;
@@ -345,7 +417,8 @@ public final class Engine {
         blackout();
     }
 
-    private void renderLayer(Run run, State s, Effect.Frame frame, double dt, double rawT, double seconds, double[] values, double stamp, int[] out) {
+    private void renderLayer(Run run, State s, Effect.Frame frame, double dt, double rawT, double seconds, double[] values, double stamp, int[] out,
+                             double local, double envelope) {
         Runtime rt = run.runtime;
         if (rt.broken) return;
         Project.Layer l = run.layer;
@@ -358,7 +431,8 @@ public final class Engine {
             layerLevels.put(l.id, level);
         }
         // Musik kann das Tempo der Ebene antreiben.
-        double layerDt = dt * s.speed * l.speed * (1 + l.audioSpeed * level);
+        boolean curve = SpeedCurve.active(l);
+        double layerDt = dt * s.speed * l.speed * (1 + l.audioSpeed * level) * (curve && Double.isNaN(local) ? SpeedCurve.factor(l, seconds, 0) : 1);
         // Effekte rechnen t * Tempo. Ändert sich der Regler, wird t so umgerechnet, dass der Effekt an seiner
         // Stelle bleibt und nur schneller oder langsamer weiterläuft, statt an eine andere Stelle zu springen.
         boolean hasSpeed = run.params.has("speed");
@@ -367,7 +441,27 @@ public final class Engine {
             if (!Double.isNaN(rt.speedUsed)) rt.t *= rt.speedUsed / effectSpeed;
             rt.speedUsed = effectSpeed;
         }
-        rt.t += layerDt;
+        if (Double.isNaN(local)) {
+            rt.t += layerDt;
+        } else {
+            // Show: Die Zeit kommt aus dem Song. Springt sie (Spulen, Clip beginnt), fängt der Effekt neu an.
+            if (Double.isNaN(rt.lastLocal) || local < rt.lastLocal - 1e-6 || local - rt.lastLocal > 0.5) rt.resetPending = true;
+            double effective = local;
+            if (curve) {
+                // Tempo-Verlauf: gelaufene Effektzeit = Integral des Tempos; beim Weiterlaufen nur das neue Stück.
+                double span = run.clip.length();
+                if (!Double.isNaN(rt.curveAt) && local >= rt.curveAt && local - rt.curveAt < 1) {
+                    rt.curveSum += SpeedCurve.integral(l, rt.curveAt, local, span);
+                } else {
+                    rt.curveSum = SpeedCurve.integral(l, 0, local, span);
+                }
+                rt.curveAt = local;
+                effective = rt.curveSum;
+            }
+            layerDt = Double.isNaN(rt.lastLocal) ? 0 : Math.max(0, effective - rt.t / Math.max(1e-9, l.speed)) * l.speed;
+            rt.lastLocal = local;
+            rt.t = effective * l.speed;
+        }
         try {
             if (rt.resetPending) {
                 rt.effect.reset(view);
@@ -397,7 +491,7 @@ public final class Engine {
         boolean adjust = hueShift != 0 || saturation != 1 || l.gamma != 1;
         double audioFactor = react ? 1 - l.audioAmount + l.audioAmount * level : 1;
         double lift = react ? Colors.clamp01(l.audioFlash * level) : 0;
-        double gain = l.brightness * audioFactor;
+        double gain = l.brightness * audioFactor * envelope;
         if (rt.trail.length != buf.length) rt.trail = new int[buf.length];
         double keep = l.trail <= 0 ? 0 : Math.exp(-dt / Math.max(0.01, l.trail * 1.2));
         int[] map = run.view.toGlobal;
