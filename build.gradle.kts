@@ -64,7 +64,7 @@ val appImage by tasks.registering(Exec::class) {
         "--input", stageDir.get().asFile.absolutePath,
         "--main-jar", tasks.jar.get().archiveFileName.get(),
         "--main-class", "de.knirpslarsi.ledstudio.Main",
-        "--add-modules", "java.base,java.desktop,java.logging,java.net.http,java.naming,java.xml,java.sql,java.scripting,jdk.crypto.ec,jdk.unsupported,jdk.zipfs",
+        "--add-modules", "java.base,java.desktop,java.logging,java.net.http,java.naming,java.xml,java.sql,java.scripting,jdk.crypto.ec,jdk.httpserver,jdk.unsupported,jdk.zipfs",
         "--java-options", "-Dfile.encoding=UTF-8",
         "--java-options", "-Xmx512m",
         "--dest", out.get().asFile.absolutePath,

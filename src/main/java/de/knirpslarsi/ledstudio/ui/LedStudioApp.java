@@ -72,6 +72,7 @@ public final class LedStudioApp extends Application {
         pages.put("Layout", new LayoutPage(core));
         pages.put("Musik", new MusicPage(core));
         pages.put("Show", new ShowPage(core));
+        pages.put("Spiele", new GamesPage(core));
         pages.put("Einstellungen", new SettingsPage(core, updates, () -> effectsPage.externalChange()));
         pages.put("Hilfe", new HelpPage(core));
         pages.values().forEach(p -> {
@@ -297,6 +298,7 @@ public final class LedStudioApp extends Application {
             names.add("Musikreaktion");
             if (pages.get("Show") instanceof ShowPage show) show.demo();
             names.add("Musik-Ebene");
+            names.add("Spiele offen");
             shoot(dir, names.toArray(new String[0]), 0);
         });
         wait.play();
@@ -336,6 +338,9 @@ public final class LedStudioApp extends Application {
             showPage("Effekte");
             effectsPage.showTab(2);
             javafx.application.Platform.runLater(effectsPage::scrollToEnd);
+        } else if (names[i].equals("Spiele offen")) {
+            if (pages.get("Spiele") instanceof GamesPage games) games.demo();
+            showPage("Spiele");
         } else if (names[i].equals("Musik-Ebene")) {
             Project.Preset music = new Project.Preset();
             music.name = "Musik-Ebene";

@@ -74,6 +74,8 @@ public final class Engine {
         int[] out;
         /** Show: der Clip, zu dem diese Ebene gehört; null bei normalen Ebenen. */
         Show.Clip clip;
+        /** Liegt über allem (Startanimation, Spiel-Ereignis); clip läuft dann in Engine-Sekunden. */
+        boolean overlay;
     }
 
     /** Alles, was die Oberfläche auf einmal austauscht. */
@@ -123,6 +125,10 @@ public final class Engine {
     private final List<MusicAnalyzer.Event> frameEvents = new ArrayList<>();
     private long eventSeq = Long.MIN_VALUE;
     private final SmoothFilter smooth = new SmoothFilter();
+    /** Animationen über allem, in der Reihenfolge des Starts (spätere liegen oben). */
+    private final List<Show.Clip> overlays = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final Map<String, Show.Clip> overlayKeys = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Double> overlayBase = new java.util.concurrent.ConcurrentHashMap<>();
 
     private volatile Set<Integer> identify;
     private volatile long identifyUntil;
@@ -237,7 +243,7 @@ public final class Engine {
                     }
                     alive.put(clip.id, rt);
                     if (track.mute || !l.enabled) continue;
-                    Run run = buildRun(l, clip.id, rt, project, layout, s);
+                    Run run = buildRun(l, clip.id, rt, project, layout, s, true);
                     run.clip = clip;
                     needsAudio |= rt.effect.needsAudio() || !"off".equals(l.audioBand);
                 }
@@ -257,9 +263,26 @@ public final class Engine {
                 }
                 alive.put(l.id, rt);
                 if (!l.enabled) continue;
-                buildRun(l, l.id, rt, project, layout, s);
+                buildRun(l, l.id, rt, project, layout, s, true);
                 needsAudio |= rt.effect.needsAudio() || !"off".equals(l.audioBand);
             }
+        }
+        for (Show.Clip clip : overlays) {
+            Project.Layer l = clip.look;
+            l.targets = new ArrayList<>(clip.targets);
+            Runtime old = runtimes.get(clip.id);
+            Runtime rt = old;
+            if (rt == null) {
+                Effect e = Effects.create(l.effect);
+                if (e == null) continue;
+                rt = new Runtime(e);
+            }
+            alive.put(clip.id, rt);
+            // Eigene Farben der Animation behalten, die globale Farbwahl gilt hier nicht.
+            Run run = buildRun(l, clip.id, rt, project, layout, s, false);
+            run.clip = clip;
+            run.overlay = true;
+            needsAudio |= rt.effect.needsAudio() || !"off".equals(l.audioBand);
         }
         runtimes.keySet().retainAll(alive.keySet());
         runtimes.putAll(alive);
@@ -267,7 +290,7 @@ public final class Engine {
         state = s;
     }
 
-    private Run buildRun(Project.Layer l, String id, Runtime rt, Project project, CompiledLayout layout, State s) {
+    private Run buildRun(Project.Layer l, String id, Runtime rt, Project project, CompiledLayout layout, State s, boolean globalColor) {
         Run run = new Run();
         run.layer = l;
         run.id = id;
@@ -280,7 +303,7 @@ public final class Engine {
             double speed = run.params.d("speed");
             if (Math.abs(speed) < MIN_EFFECT_SPEED) run.params.set("speed", speed < 0 ? -MIN_EFFECT_SPEED : MIN_EFFECT_SPEED);
         }
-        applyGlobalColor(project.color, run.params);
+        if (globalColor) applyGlobalColor(project.color, run.params);
         run.stops = LayerFx.stops(l);
         run.out = new int[run.view.toGlobal.length];
         String signature = System.identityHashCode(layout) + "|" + l.targets + "|" + l.ledFilter + "|" + l.scope;
@@ -304,6 +327,76 @@ public final class Engine {
         this.show = show;
         this.showClock = clock;
         if (lastProject != null && lastLayout != null) apply(lastProject, lastLayout);
+    }
+
+    // ---- Animationen über allem
+
+    /** Uhr der Animationen in Sekunden. */
+    public static double now() {
+        return System.nanoTime() / 1e9;
+    }
+
+    /**
+     * Spielt eine Animation über allem ab. seconds <= 0 hält sie, bis release(key) kommt. Ein neuer Start mit
+     * demselben key ersetzt die laufende Animation.
+     */
+    public synchronized Show.Clip play(String key, Project.Layer look, double seconds, double fadeIn, double fadeOut) {
+        Show.Clip clip = new Show.Clip();
+        clip.look = Project.GSON.fromJson(Project.GSON.toJson(look), Project.Layer.class);
+        clip.look.id = clip.id;
+        clip.look.enabled = true;
+        clip.targets = clip.look.targets == null ? new ArrayList<>() : new ArrayList<>(clip.look.targets);
+        boolean hold = seconds <= 0;
+        if (hold) clip.look.speedMode = "off"; // ein Tempo-Verlauf braucht eine feste Länge
+        clip.fadeIn = Math.max(0, fadeIn);
+        clip.fadeOut = Math.max(0, fadeOut);
+        clip.start = now();
+        clip.end = hold ? Double.POSITIVE_INFINITY : clip.start + Math.max(0.05, seconds);
+        if (key != null) {
+            Show.Clip old = overlayKeys.put(key, clip);
+            if (old != null) overlays.remove(old);
+        }
+        overlayBase.put(clip.id, clip.look.brightness);
+        double t = now();
+        overlays.removeIf(c -> c.end <= t);
+        overlays.add(clip);
+        if (lastProject != null && lastLayout != null) apply(lastProject, lastLayout);
+        return clip;
+    }
+
+    /** Lässt eine gehaltene (oder laufende) Animation ausblenden. */
+    public void release(String key) {
+        Show.Clip c = key == null ? null : overlayKeys.remove(key);
+        if (c == null) return;
+        double end = now() + c.fadeOut;
+        if (end < c.end) c.end = end;
+    }
+
+    /** Stärke einer laufenden Animation (0..1), z. B. wie stark man geblendet ist. */
+    public void level(String key, double v) {
+        Show.Clip c = key == null ? null : overlayKeys.get(key);
+        if (c == null) return;
+        c.look.brightness = overlayBase.getOrDefault(c.id, 1.0) * Math.max(0, Math.min(1, v));
+    }
+
+    public boolean playing(String key) {
+        Show.Clip c = key == null ? null : overlayKeys.get(key);
+        return c != null && c.end > now();
+    }
+
+    /** Beendet alle Animationen sofort. */
+    public synchronized void stopOverlays() {
+        overlays.clear();
+        overlayKeys.clear();
+        overlayBase.clear();
+        if (lastProject != null && lastLayout != null) apply(lastProject, lastLayout);
+    }
+
+    private synchronized void pruneOverlays(double t) {
+        boolean removed = overlays.removeIf(c -> c.end <= t);
+        overlayKeys.values().removeIf(c -> c.end <= t);
+        overlayBase.keySet().retainAll(overlays.stream().map(c -> c.id).toList());
+        if (removed && lastProject != null && lastLayout != null) apply(lastProject, lastLayout);
     }
 
     public boolean showActive() {
@@ -377,6 +470,7 @@ public final class Engine {
             String soloId = solo;
             double showTime = s.clock != null ? s.clock.getAsDouble() : Double.NaN;
             for (Run run : s.runs) {
+                if (run.overlay) continue;
                 if (soloId != null && !soloId.equals(run.id)) continue;
                 if (run.clip != null) {
                     double env = run.clip.envelope(showTime);
@@ -390,6 +484,18 @@ public final class Engine {
                 }
             }
             if (s.audio.enabled && !s.off && s.clock == null) music.render(s.layout, seconds, values, stamp, s.audio, out);
+            boolean expired = false;
+            for (Run run : s.runs) {
+                if (!run.overlay) continue;
+                double env = run.clip.envelope(seconds);
+                if (env <= 0) {
+                    run.runtime.lastLocal = Double.NaN;
+                    if (seconds >= run.clip.end) expired = true;
+                    continue;
+                }
+                renderLayer(run, s, frame, dt, (now - startNanos) / 1e9, seconds, values, stamp, out, seconds - run.clip.start, env);
+            }
+            if (expired) pruneOverlays(seconds);
             post(s, out, trail, dt);
             smooth.apply(out, dt, s.smoothSeconds);
             Set<Integer> id = identify;

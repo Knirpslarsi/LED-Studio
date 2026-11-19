@@ -166,6 +166,8 @@ public class Project {
     /** Namen der mitgelieferten Vorlagen, die schon angeboten wurden. Neue kommen bei einem Update dazu. */
     public List<String> offeredDefaults;
     public Audio audio = new Audio();
+    /** Startanimation, Spielerkennung und Counter-Strike 2. */
+    public Games games = new Games();
     public List<Fixture> fixtures = new ArrayList<>();
 
     public Preset preset(String name) {
@@ -226,6 +228,8 @@ public class Project {
         p.addNewDefaultPresets(defaultPresets());
         if (p.audio == null) p.audio = new Audio();
         if (p.fixtures == null) p.fixtures = new ArrayList<>();
+        if (p.games == null) p.games = new Games();
+        p.games.complete();
         return p;
     }
 

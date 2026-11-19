@@ -33,6 +33,9 @@ public final class AppCore {
     public final AudioEngine audio;
     public final Engine engine;
     public final Connection connection;
+    /** Spielerkennung, Startanimationen und Counter-Strike 2. */
+    public final de.knirpslarsi.ledstudio.games.GameLink games;
+    private boolean introPlayed;
     public final boolean demo;
     /** Nur lesen: Geräte anzeigen, aber nie an die Hardware schreiben. */
     private final boolean readOnly;
@@ -65,6 +68,8 @@ public final class AppCore {
                 this::backendChanged, this::devicesChanged, this::statusChanged);
         compiled = CompiledLayout.compile(project.fixtures, List.of());
         engine.apply(project, compiled);
+        games = new de.knirpslarsi.ledstudio.games.GameLink(project, engine, () -> project.current, this::selectPreset,
+                Platform::runLater, () -> settingsListeners.forEach(Runnable::run));
         saveTimer.setOnFinished(e -> project.save());
     }
 
@@ -72,11 +77,13 @@ public final class AppCore {
         engine.start();
         audio.start();
         connection.start();
+        games.start();
     }
 
     /** Speichert und schaltet die LEDs aus. */
     public void shutdown() {
         project.save();
+        games.stop();
         audio.stop();
         engine.stop();
         connection.stop();
@@ -94,6 +101,11 @@ public final class AppCore {
         Platform.runLater(() -> {
             recompile();
             deviceListeners.forEach(Runnable::run);
+            // Startanimation, sobald die LEDs erreichbar sind.
+            if (!introPlayed && !list.isEmpty()) {
+                introPlayed = true;
+                games.playAppIntro();
+            }
         });
     }
 
@@ -128,6 +140,7 @@ public final class AppCore {
     /** Nach Änderungen an Vorlagen und Einstellungen aufrufen. */
     public void settingsChanged() {
         engine.apply(project, compiled);
+        games.settingsChanged();
         saveTimer.playFromStart();
         settingsListeners.forEach(Runnable::run);
     }
