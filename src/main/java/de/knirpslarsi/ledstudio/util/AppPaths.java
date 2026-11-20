@@ -39,6 +39,10 @@ public final class AppPaths {
         return dataDir().resolve("effects");
     }
 
+    public static Path pluginsDir() {
+        return dataDir().resolve("plugins");
+    }
+
     public static Path logFile() {
         return dataDir().resolve("ledstudio.log");
     }

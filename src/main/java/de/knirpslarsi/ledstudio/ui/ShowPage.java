@@ -434,6 +434,15 @@ final class ShowPage extends BorderPane {
         timeline.redraw();
     }
 
+    /** Plugin entfernt oder ausgeschaltet: Wiedergabe beenden und die LEDs wieder der Vorlage überlassen. */
+    void deactivate() {
+        player.stop();
+        playButton.setSelected(false);
+        playButton.setText("▶  Abspielen");
+        core.engine.setShow(null, null);
+        engineShowing = false;
+    }
+
     /** LEDs zeigen die Show, solange sie läuft oder die Seite mit „Auf den LEDs zeigen“ offen ist. */
     private void refreshEngine() {
         boolean active = player.playing() || (isVisible() && onLeds.isSelected());

@@ -25,7 +25,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Startanimation der Software, Spielerkennung mit Spielstart-Animation und Counter-Strike 2. */
+/** Plugin „Spiele“: Spielerkennung mit Spielstart-Animation und Counter-Strike 2. */
 final class GamesPage extends ScrollPane {
     private static final String NO_PRESET = "— Vorlage nicht wechseln —";
 
@@ -62,30 +62,9 @@ final class GamesPage extends ScrollPane {
                 Ui.label("Spiele", "page-title"),
                 muted("LED Studio erkennt, wenn ein Spiel startet, spielt dazu eine Animation und kann für die Dauer des Spiels "
                         + "eine eigene Vorlage zeigen. Counter-Strike 2 steuert die LEDs sogar direkt: Bombe, Kills, Treffer und mehr."));
-        appIntro();
         detection();
         cs2();
         refreshStatus();
-    }
-
-    // ---- Startanimation der Software
-
-    private void appIntro() {
-        Games.Animation a = games().appIntro;
-        CheckBox on = new CheckBox("Beim Start der Software abspielen");
-        on.setSelected(a.enabled);
-        on.selectedProperty().addListener((o, x, y) -> {
-            a.enabled = y;
-            save();
-        });
-        box.getChildren().addAll(Ui.section("Startanimation der Software"),
-                muted("Läuft einmal, sobald nach dem Start die LEDs erreichbar sind."),
-                card("app", on, null, () -> core.games.preview(a), () -> new AnimationEditor(a, this::save),
-                        Ui.button("Standard", "Die mitgelieferte Startanimation wiederherstellen", () -> {
-                            games().appIntro = Games.appIntroDefault();
-                            save();
-                            build();
-                        })));
     }
 
     // ---- Spielerkennung

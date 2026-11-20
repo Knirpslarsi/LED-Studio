@@ -348,6 +348,8 @@ public final class Engine {
         clip.targets = clip.look.targets == null ? new ArrayList<>() : new ArrayList<>(clip.look.targets);
         boolean hold = seconds <= 0;
         if (hold) clip.look.speedMode = "off"; // ein Tempo-Verlauf braucht eine feste Länge
+        // Animationen mit Anfang und Ende kennen so ihre Länge; gehaltene wiederholen sich.
+        clip.look.params.put("_length", hold ? 0.0 : seconds);
         clip.fadeIn = Math.max(0, fadeIn);
         clip.fadeOut = Math.max(0, fadeOut);
         clip.start = now();

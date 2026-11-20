@@ -168,6 +168,10 @@ public class Project {
     public Audio audio = new Audio();
     /** Startanimation, Spielerkennung und Counter-Strike 2. */
     public Games games = new Games();
+    /** Spiele und Show sind seit 1.6.0 Plugins; einmal geprüft, ob sie schon benutzt wurden. */
+    public boolean featuresMigrated;
+    /** Beim Laden: Gab es schon Spiele-Einstellungen (also lief 1.5.0)? Wird nicht gespeichert. */
+    public transient boolean hadGames;
     public List<Fixture> fixtures = new ArrayList<>();
 
     public Preset preset(String name) {
@@ -228,6 +232,7 @@ public class Project {
         p.addNewDefaultPresets(defaultPresets());
         if (p.audio == null) p.audio = new Audio();
         if (p.fixtures == null) p.fixtures = new ArrayList<>();
+        p.hadGames = p.games != null;
         if (p.games == null) p.games = new Games();
         p.games.complete();
         return p;

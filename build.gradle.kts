@@ -30,6 +30,8 @@ tasks.withType<JavaExec> { jvmArgs("-Dfile.encoding=UTF-8") }
 tasks.test {
     useJUnitPlatform()
     systemProperty("file.encoding", "UTF-8")
+    // Vorschaubild der Animationen: gradlew test -Panim.sheet=pfad.png
+    findProperty("anim.sheet")?.let { systemProperty("anim.sheet", it) }
 }
 
 // Schreibt die Version in die App, damit der Updater sie vergleichen kann.

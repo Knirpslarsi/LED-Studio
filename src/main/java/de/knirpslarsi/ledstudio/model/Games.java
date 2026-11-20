@@ -90,6 +90,8 @@ public class Games {
     public boolean detect = true;
     public List<Game> games = defaultGames();
     public Cs2 cs2 = new Cs2();
+    /** Stand der Vorgaben, mit dem die Einstellungen zuletzt abgeglichen wurden. */
+    public int style;
 
     /** Ergänzt fehlende Teile, z. B. nach einem Update mit neuen Ereignissen. */
     public void complete() {
@@ -99,6 +101,7 @@ public class Games {
         if (cs2 == null) cs2 = new Cs2();
         if (cs2.events == null) cs2.events = new LinkedHashMap<>();
         if (cs2.token == null || cs2.token.isBlank()) cs2.token = new Cs2().token;
+        upgrade();
         Map<String, Animation> defaults = cs2Defaults();
         for (Cs2Event e : CS2_EVENTS) {
             Animation a = cs2.events.get(e.id());
@@ -125,12 +128,14 @@ public class Games {
         return Project.Layer.solid(hex);
     }
 
-    public static Animation appIntroDefault() {
+    // ---- Vorgaben bis 1.5.0, nur zum Erkennen beim Upgrade
+
+    static Animation legacyAppIntro() {
         Project.Layer l = layer("rim_chase", "rainbow", 1, "mode", "led", "speed", 45.0, "tail", 28.0, "gap", 0.0, "soft", 2.0);
         return new Animation(l, 3.5, 0.2, 1.2);
     }
 
-    public static Animation gameIntro(double hue) {
+    static Animation legacyGameIntro(double hue) {
         Project.Layer l = layer("rim_chase", "hue", hue, "rainbow", 0, "mode", "led", "speed", 60.0, "tail", 30.0, "gap", 0.0, "soft", 2.0);
         return new Animation(l, 3, 0.15, 1.0);
     }
@@ -151,7 +156,7 @@ public class Games {
         return list;
     }
 
-    public static Map<String, Animation> cs2Defaults() {
+    static Map<String, Animation> legacyCs2() {
         Map<String, Animation> m = new LinkedHashMap<>();
         m.put("match_start", new Animation(layer("rainbow", "speed", 1.5, "repeat", 1.0), 3, 0.2, 1.0));
         m.put("round_start", new Animation(color("#FFFFFF"), 0.5, 0.05, 0.45));
@@ -175,5 +180,78 @@ public class Games {
         m.put("team_ct", new Animation(color("#3060D0"), 0, 0.5, 0.5).off());
         m.put("team_t", new Animation(color("#E08A20"), 0, 0.5, 0.5).off());
         return m;
+    }
+
+    // ---- Aktuelle Vorgaben
+
+    public static Animation appIntroDefault() {
+        return new Animation(layer("anim_boot", "color_a", "#A020FF", "color_b", "#00DDFF"), 4, 0, 1.0);
+    }
+
+    /** Spielstart: die Lüfter drehen hoch wie eine Turbine, in den Farben des Spiels. */
+    public static Animation gameIntro(double hue) {
+        String a = de.knirpslarsi.ledstudio.util.Colors.toHex(de.knirpslarsi.ledstudio.util.Colors.hsv(hue, 1, 1));
+        String b = de.knirpslarsi.ledstudio.util.Colors.toHex(de.knirpslarsi.ledstudio.util.Colors.hsv(hue + 0.08, 0.85, 1));
+        return new Animation(layer("anim_spin", "color_a", a, "color_b", b), 3, 0, 0.8);
+    }
+
+    public static Map<String, Animation> cs2Defaults() {
+        Map<String, Animation> m = new LinkedHashMap<>();
+        m.put("match_start", new Animation(layer("anim_warp", "color_a", "#FFB040", "color_b", "#FF6000"), 3, 0, 0.6));
+        m.put("round_start", new Animation(layer("anim_scan", "color_a", "#FFFFFF", "color_b", "#FFB000"), 1.2, 0, 0.3));
+        m.put("round_won", new Animation(layer("anim_fireworks", "rainbow", 1, "rockets", 6), 4, 0, 1.0));
+        m.put("round_lost", new Animation(layer("anim_shatter", "color_a", "#FF2020", "color_b", "#500000"), 2.5, 0, 0.4));
+        m.put("bomb_planted", new Animation(layer("anim_alarm", "color_a", "#FF0000", "color_b", "#FF6000"), 40, 0, 0.3));
+        m.put("bomb_exploded", new Animation(layer("anim_explosion"), 3.5, 0, 1.0));
+        m.put("bomb_defused", new Animation(layer("anim_shockwave", "color_a", "#2080FF", "color_b", "#00FFE0", "waves", 3), 2, 0, 0.6));
+        m.put("kill", new Animation(layer("anim_hit", "color_a", "#FFFFFF", "color_b", "#FF3010"), 0.6, 0, 0.2));
+        m.put("headshot", new Animation(layer("anim_hit", "color_a", "#FFF0A0", "color_b", "#FFB000", "punch", 1.5, "sparks", 1.0), 0.9, 0, 0.3));
+        m.put("death", new Animation(layer("anim_flatline", "color_a", "#FF0010", "color_b", "#300000"), 2.5, 0, 0.5));
+        m.put("low_health", new Animation(layer("anim_heartbeat", "bpm", 120.0), 0, 0.3, 0.5));
+        m.put("flashed", new Animation(color("#FFFFFF"), 0, 0.0, 0.3));
+        m.put("burning", new Animation(layer("fire", "speed", 2.0, "scale", 3.0), 0, 0.1, 0.5));
+        m.put("team_ct", new Animation(color("#3060D0"), 0, 0.5, 0.5).off());
+        m.put("team_t", new Animation(color("#E08A20"), 0, 0.5, 0.5).off());
+        return m;
+    }
+
+    /** Stand der mitgelieferten Animationen; ältere, unveränderte Vorgaben werden ersetzt. */
+    static final int STYLE = 2;
+
+    /** Ersetzt nur Animationen, die noch genau der alten Vorgabe entsprechen. Eigene bleiben. */
+    private void upgrade() {
+        if (style >= STYLE) return;
+        if (sameLook(appIntro, legacyAppIntro(), false)) appIntro = keep(appIntro, appIntroDefault());
+        for (Game g : games) {
+            if (g.intro != null && sameLook(g.intro, legacyGameIntro(0), true)) {
+                double hue = g.intro.look.params.get("hue") instanceof Number n ? n.doubleValue() : 0.77;
+                g.intro = keep(g.intro, gameIntro(hue));
+            }
+        }
+        Map<String, Animation> old = legacyCs2(), now = cs2Defaults();
+        for (Map.Entry<String, Animation> e : old.entrySet()) {
+            Animation mine = cs2.events.get(e.getKey());
+            if (mine != null && sameLook(mine, e.getValue(), false)) cs2.events.put(e.getKey(), keep(mine, now.get(e.getKey())));
+        }
+        style = STYLE;
+    }
+
+    /** Neue Vorgabe, aber ein- oder ausgeschaltet wie vorher. */
+    private static Animation keep(Animation before, Animation fresh) {
+        fresh.enabled = before.enabled;
+        return fresh;
+    }
+
+    private static boolean sameLook(Animation a, Animation b, boolean ignoreHue) {
+        if (a == null || a.look == null || b.look == null) return false;
+        return a.seconds == b.seconds && signature(a, ignoreHue).equals(signature(b, ignoreHue));
+    }
+
+    private static String signature(Animation a, boolean ignoreHue) {
+        java.lang.reflect.Type type = new com.google.gson.reflect.TypeToken<java.util.TreeMap<String, Object>>() {
+        }.getType();
+        java.util.TreeMap<String, Object> params = Project.GSON.fromJson(Project.GSON.toJson(a.look.params), type);
+        if (ignoreHue) params.remove("hue");
+        return a.look.effect + Project.GSON.toJson(params) + a.look.brightness + a.look.speed;
     }
 }

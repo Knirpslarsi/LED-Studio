@@ -3,6 +3,7 @@ package de.knirpslarsi.ledstudio.effects;
 import de.knirpslarsi.ledstudio.layout.CompiledLayout.Led;
 import de.knirpslarsi.ledstudio.util.Colors;
 import org.mozilla.javascript.Context;
+import org.mozilla.javascript.ContextFactory;
 import org.mozilla.javascript.Function;
 import org.mozilla.javascript.NativeArray;
 import org.mozilla.javascript.Scriptable;
@@ -34,8 +35,31 @@ public final class ScriptEffects {
     private ScriptEffects() {
     }
 
+    /** Längste Rechenzeit eines Bildes, bevor der Effekt abgebrochen wird. */
+    private static final long FRAME_BUDGET_NANOS = 150_000_000L;
+    private static final long LOAD_BUDGET_NANOS = 2_000_000_000L;
+
+    /** Rhino mit Zeitlimit: Endlosschleifen in einem Effekt halten nicht die ganze Bildschleife an. */
+    private static final ContextFactory FACTORY = new ContextFactory() {
+        @Override
+        protected void observeInstructionCount(Context cx, int instructionCount) {
+            Object deadline = cx.getThreadLocal("deadline");
+            if (deadline instanceof Long d && System.nanoTime() > d)
+                throw new IllegalStateException("Effekt rechnet zu lange und wurde angehalten");
+        }
+    };
+
+    /** Ein Effekt aus einem Plugin: Datei, feste ID und Name des Plugins. */
+    public record Extra(String id, Path file, String plugin) {
+    }
+
     /** Lädt alle .js-Dateien. Gibt für jede defekte Datei eine Meldung zurück. */
     public static List<String> load(Path folder) {
+        return load(folder, List.of());
+    }
+
+    /** Lädt den Effekt-Ordner und die Effekte aus Plugins. */
+    public static List<String> load(Path folder, List<Extra> extras) {
         List<String> errors = new ArrayList<>();
         Map<String, Supplier<Effect>> found = new LinkedHashMap<>();
         try (Stream<Path> files = Files.exists(folder) ? Files.list(folder) : Stream.empty()) {
@@ -53,6 +77,22 @@ public final class ScriptEffects {
         } catch (IOException e) {
             errors.add(e.getMessage());
         }
+        for (Extra x : extras) {
+            try {
+                String source = Files.readString(x.file());
+                ScriptEffect check = new ScriptEffect(x.id(), source);
+                String blurb = "Aus dem Plugin „" + x.plugin() + "“.";
+                check.blurb = blurb;
+                found.put(x.id(), () -> {
+                    ScriptEffect e = new ScriptEffect(x.id(), source);
+                    e.blurb = blurb;
+                    return e;
+                });
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "Plugin-Effekt " + x.file() + " fehlerhaft", e);
+                errors.add(x.plugin() + " / " + x.file().getFileName() + ": " + e.getMessage());
+            }
+        }
         Effects.setCustom(found);
         return errors;
     }
@@ -65,6 +105,7 @@ public final class ScriptEffects {
         private Function render;
         private Thread owner;
         private Context cx;
+        String blurb = "Eigener Effekt aus dem Effekt-Ordner.";
 
         ScriptEffect(String id, String source) {
             this.id = id;
@@ -72,10 +113,11 @@ public final class ScriptEffects {
             Context c = enter();
             try {
                 Scriptable s = c.initSafeStandardObjects();
+                c.putThreadLocal("deadline", System.nanoTime() + LOAD_BUDGET_NANOS);
                 c.evaluateString(s, source, id, 1, null);
                 if (!(ScriptableObject.getProperty(s, "render") instanceof Function))
                     throw new IllegalArgumentException("Funktion render(led, t, p) fehlt");
-                String t = id.substring(3);
+                String t = id.replaceFirst("^(js|plugin)_", "");
                 Object info = ScriptableObject.getProperty(s, "INFO");
                 if (info instanceof Scriptable i) {
                     Object name = ScriptableObject.getProperty(i, "title");
@@ -92,8 +134,9 @@ public final class ScriptEffects {
         }
 
         private static Context enter() {
-            Context c = Context.enter();
+            Context c = FACTORY.enterContext();
             c.setOptimizationLevel(-1);
+            c.setInstructionObserverThreshold(20_000);
             c.setLanguageVersion(Context.VERSION_ES6);
             return c;
         }
@@ -125,7 +168,7 @@ public final class ScriptEffects {
 
         @Override
         public String blurb() {
-            return "Eigener Effekt aus dem Effekt-Ordner.";
+            return blurb;
         }
 
         @Override
@@ -140,9 +183,11 @@ public final class ScriptEffects {
                 owner = Thread.currentThread();
                 cx = enter();
                 scope = cx.initSafeStandardObjects();
+                cx.putThreadLocal("deadline", System.nanoTime() + LOAD_BUDGET_NANOS);
                 cx.evaluateString(scope, source, id, 1, null);
                 render = (Function) ScriptableObject.getProperty(scope, "render");
             }
+            cx.putThreadLocal("deadline", System.nanoTime() + FRAME_BUDGET_NANOS);
             Scriptable params = cx.newObject(scope);
             for (ParamSpec s : specs) {
                 Object v = switch (s.type) {

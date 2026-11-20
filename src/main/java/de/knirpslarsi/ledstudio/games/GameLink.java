@@ -44,6 +44,8 @@ public final class GameLink {
     private final Runnable changed;
 
     private ScheduledExecutorService timer;
+    /** Nur mit installiertem Plugin „Spiele“ aktiv. */
+    private volatile boolean active;
     private HttpServer server;
     private int serverPort = -1;
     private final Cs2Events cs2 = new Cs2Events();
@@ -65,7 +67,35 @@ public final class GameLink {
         this.changed = changed;
     }
 
-    public void start() {
+    /** Schaltet Spielerkennung und CS2-Empfang ein oder aus (Plugin installiert/entfernt). */
+    public synchronized void setActive(boolean on) {
+        if (on == active) return;
+        active = on;
+        if (on) {
+            start();
+        } else {
+            stop();
+            engine.release("game");
+            for (Games.Cs2Event e : Games.CS2_EVENTS) engine.release("cs2:" + e.id());
+            restorePreset();
+            running.clear();
+            firstScan = true;
+        }
+    }
+
+    public boolean active() {
+        return active;
+    }
+
+    private void restorePreset() {
+        if (presetBefore == null) return;
+        String before = presetBefore;
+        presetBefore = null;
+        presetGame = null;
+        fx.accept(() -> selectPreset.accept(before));
+    }
+
+    private void start() {
         timer = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "games");
             t.setDaemon(true);
@@ -77,13 +107,14 @@ public final class GameLink {
 
     public void stop() {
         if (timer != null) timer.shutdownNow();
+        timer = null;
         stopServer();
     }
 
     /** Nach Änderungen an den Einstellungen: Server an/aus, Port wechseln. */
     public synchronized void settingsChanged() {
         Games.Cs2 c = project.games.cs2;
-        if (!c.enabled) {
+        if (!c.enabled || !active) {
             stopServer();
             serverError = "";
             return;

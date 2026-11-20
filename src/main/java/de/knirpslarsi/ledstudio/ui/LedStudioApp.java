@@ -49,6 +49,11 @@ public final class LedStudioApp extends Application {
     private boolean quitting;
     private boolean trayAvailable;
     private final Map<String, Node> pages = new LinkedHashMap<>();
+    /** Seiten aus mitgelieferten Plugins: erst gebaut, wenn das Plugin aktiv ist und die Seite geöffnet wird. */
+    private final Map<String, java.util.function.Supplier<Node>> factories = new java.util.HashMap<>();
+    private static final Map<String, String> FEATURE_PAGES = Map.of(
+            "Show", de.knirpslarsi.ledstudio.plugins.Plugins.SHOW, "Spiele", de.knirpslarsi.ledstudio.plugins.Plugins.GAMES);
+    private String currentPage = "";
     private final Map<String, ToggleButton> navButtons = new LinkedHashMap<>();
     private final StackPane content = new StackPane();
     private EffectsPage effectsPage;
@@ -71,11 +76,15 @@ public final class LedStudioApp extends Application {
         pages.put("Effekte", effectsPage);
         pages.put("Layout", new LayoutPage(core));
         pages.put("Musik", new MusicPage(core));
-        pages.put("Show", new ShowPage(core));
-        pages.put("Spiele", new GamesPage(core));
+        pages.put("Show", null);
+        factories.put("Show", () -> new ShowPage(core));
+        pages.put("Spiele", null);
+        factories.put("Spiele", () -> new GamesPage(core));
+        pages.put("Plugins", new PluginsPage(core));
         pages.put("Einstellungen", new SettingsPage(core, updates, () -> effectsPage.externalChange()));
         pages.put("Hilfe", new HelpPage(core));
         pages.values().forEach(p -> {
+            if (p == null) return;
             p.setVisible(false);
             content.getChildren().add(p);
         });
@@ -103,6 +112,8 @@ public final class LedStudioApp extends Application {
             }
         });
 
+        core.onFeatures(this::refreshFeatures);
+        refreshFeatures();
         showPage(core.project.fixtures.isEmpty() ? "Layout" : "Effekte");
         LOG.info("LED Studio " + Updater.currentVersion() + " gestartet");
         core.start();
@@ -167,8 +178,42 @@ public final class LedStudioApp extends Application {
         return box;
     }
 
+    /** Seite erst bauen, wenn sie gebraucht wird. */
+    private Node ensure(String name) {
+        Node p = pages.get(name);
+        if (p == null && factories.containsKey(name)) {
+            p = factories.get(name).get();
+            p.setVisible(false);
+            content.getChildren().add(p);
+            pages.put(name, p);
+        }
+        return p;
+    }
+
+    /** Navigation an die installierten Plugins anpassen; entfernte Funktionen hören sofort auf. */
+    private void refreshFeatures() {
+        FEATURE_PAGES.forEach((page, feature) -> {
+            boolean on = core.feature(feature);
+            ToggleButton b = navButtons.get(page);
+            if (b != null) {
+                b.setVisible(on);
+                b.setManaged(on);
+            }
+            if (!on) {
+                if (pages.get(page) instanceof ShowPage show) show.deactivate();
+                if (page.equals(currentPage)) showPage("Plugins");
+            }
+        });
+    }
+
     private void showPage(String name) {
-        pages.forEach((k, p) -> p.setVisible(k.equals(name)));
+        if (FEATURE_PAGES.containsKey(name) && !core.feature(FEATURE_PAGES.get(name))) name = "Plugins";
+        ensure(name);
+        currentPage = name;
+        String shown = name;
+        pages.forEach((k, p) -> {
+            if (p != null) p.setVisible(k.equals(shown));
+        });
         ToggleButton b = navButtons.get(name);
         if (b != null) b.setSelected(true);
     }
@@ -283,6 +328,22 @@ public final class LedStudioApp extends Application {
     private void runScreenshots(String dir) {
         PauseTransition wait = new PauseTransition(Duration.seconds(2.5));
         wait.setOnFinished(e -> {
+            if (core.demo) {
+                // Erst ohne die offiziellen Plugins: Show und Spiele fehlen in der Navigation.
+                try {
+                    new File(dir).mkdirs();
+                    ImageIO.write(SwingFXUtils.fromFXImage(stage.getScene().snapshot(null), null), "png", new File(dir, "Ohne Plugins.png"));
+                } catch (IOException ex) {
+                    LOG.log(Level.WARNING, "Screenshot", ex);
+                }
+                try {
+                    core.plugins.installBuiltin(de.knirpslarsi.ledstudio.plugins.Plugins.GAMES);
+                    core.plugins.installBuiltin(de.knirpslarsi.ledstudio.plugins.Plugins.SHOW);
+                } catch (IOException ex) {
+                    LOG.log(Level.WARNING, "Demo-Plugins", ex);
+                }
+                core.featuresChanged();
+            }
             if (core.project.fixtures.isEmpty() && core.demo) {
                 core.project.fixtures.addAll(LayoutTools.legacyNzxtChain(core.controllers()));
                 core.layoutChanged();
@@ -296,7 +357,7 @@ public final class LedStudioApp extends Application {
             java.util.List<String> names = new java.util.ArrayList<>(pages.keySet());
             names.add("Feinschliff");
             names.add("Musikreaktion");
-            if (pages.get("Show") instanceof ShowPage show) show.demo();
+            if (ensure("Show") instanceof ShowPage show) show.demo();
             names.add("Musik-Ebene");
             names.add("Spiele offen");
             shoot(dir, names.toArray(new String[0]), 0);
@@ -339,7 +400,7 @@ public final class LedStudioApp extends Application {
             effectsPage.showTab(2);
             javafx.application.Platform.runLater(effectsPage::scrollToEnd);
         } else if (names[i].equals("Spiele offen")) {
-            if (pages.get("Spiele") instanceof GamesPage games) games.demo();
+            if (ensure("Spiele") instanceof GamesPage games) games.demo();
             showPage("Spiele");
         } else if (names[i].equals("Musik-Ebene")) {
             Project.Preset music = new Project.Preset();

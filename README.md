@@ -70,9 +70,24 @@ Quelle ist der PC-Sound oder ein Mikrofon. Audio wird nur lokal ausgewertet, nie
 
 **Eigene Effekte:** JavaScript-Dateien im Effekt-Ordner, siehe [docs/beispiel-effekt.js](docs/beispiel-effekt.js).
 
+## Plugins
+
+Unter **Plugins** installierst du neue Effekte und Vorlagen aus GitHub-Repos (`name/repo`), aus einer ZIP-Datei oder aus
+dem Katalog [LED-Studio-Plugins](https://github.com/Knirpslarsi/LED-Studio-Plugins). Eigene Plugins legst du dort mit
+einem Klick an und veröffentlichst sie als eigenes GitHub-Repo – Anleitung: [docs/plugins.md](docs/plugins.md).
+Effekte aus Plugins laufen abgeschottet ohne Zugriff auf Dateien, Internet oder den PC.
+
+Zwei **offizielle Plugins** sind mitgeliefert und werden dort installiert oder entfernt:
+
+- **Show-Editor** – die Seite **Show** (siehe unten).
+- **Spiele & Counter-Strike 2** – erkennt den Spielstart, spielt eine Animation je Spiel, zeigt im Spiel eine eigene
+  Vorlage und bringt CS2-Ereignisse (Bombe, Kills, Treffer, Tod …) über Valves Game State Integration auf die LEDs.
+
+Die **Startanimation** beim Programmstart stellst du unter **Einstellungen** ein.
+
 ## Show (Timecode)
 
-Auf der Seite **Show** baust du eine Lichtshow passend zu einem Song, bis auf jede einzelne LED genau.
+Mit dem Plugin **Show-Editor** baust du auf der Seite **Show** eine Lichtshow passend zu einem Song, bis auf jede einzelne LED genau.
 
 - **Song laden:** MP3 oder WAV. LED Studio zeigt die Wellenform, erkennt Tempo, Beats und Song-Teile (Aufbau, Drop, ruhig) und blendet sie als Raster ein.
 - **Spuren:** Jede Spur hat ein Ziel: alles, Geräte, Lüfter oder einzelne LEDs (Klick auf eine LED, Umschalt+Klick für den ganzen Lüfter). **Eine Spur je LED** oder **je Lüfter** legt sie mit einem Klick an. Obere Spuren liegen über unteren.

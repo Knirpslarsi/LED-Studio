@@ -35,6 +35,8 @@ public final class AppCore {
     public final Connection connection;
     /** Spielerkennung, Startanimationen und Counter-Strike 2. */
     public final de.knirpslarsi.ledstudio.games.GameLink games;
+    /** Installierte und selbst gebaute Plugins. */
+    public final de.knirpslarsi.ledstudio.plugins.Plugins plugins = new de.knirpslarsi.ledstudio.plugins.Plugins(AppPaths.pluginsDir());
     private boolean introPlayed;
     public final boolean demo;
     /** Nur lesen: Geräte anzeigen, aber nie an die Hardware schreiben. */
@@ -50,6 +52,7 @@ public final class AppCore {
     private final List<Runnable> deviceListeners = new ArrayList<>();
     private final List<Runnable> settingsListeners = new ArrayList<>();
     private final List<Consumer<String>> statusListeners = new ArrayList<>();
+    private final List<Runnable> featureListeners = new ArrayList<>();
     private final Deque<String> undo = new ArrayDeque<>();
     private final Deque<String> redo = new ArrayDeque<>();
     private final PauseTransition saveTimer = new PauseTransition(Duration.millis(400));
@@ -58,7 +61,7 @@ public final class AppCore {
         this.demo = demo;
         this.readOnly = readOnly;
         project = Project.load();
-        ScriptEffects.load(AppPaths.effectsDir());
+        reloadEffects();
         audio = new AudioEngine(() -> project.audio);
         engine = new Engine(audio, e -> {
             LOG.log(Level.INFO, "Schreibfehler", e);
@@ -71,13 +74,52 @@ public final class AppCore {
         games = new de.knirpslarsi.ledstudio.games.GameLink(project, engine, () -> project.current, this::selectPreset,
                 Platform::runLater, () -> settingsListeners.forEach(Runnable::run));
         saveTimer.setOnFinished(e -> project.save());
+        migrateFeatures();
+    }
+
+    /**
+     * Seit 1.6.0 sind Spiele und Show Plugins. Wer sie vorher schon hatte, bekommt sie einmal als installiertes Plugin,
+     * damit beim Update nichts verschwindet. Danach entscheidet nur der Plugin-Manager.
+     */
+    private void migrateFeatures() {
+        if (project.featuresMigrated || demo) return;
+        try {
+            if (project.hadGames) plugins.installBuiltin(de.knirpslarsi.ledstudio.plugins.Plugins.GAMES);
+            boolean shows = !project.lastShow.isBlank();
+            java.nio.file.Path folder = de.knirpslarsi.ledstudio.model.Show.folder();
+            if (!shows && java.nio.file.Files.isDirectory(folder)) {
+                try (var s = java.nio.file.Files.list(folder)) {
+                    shows = s.anyMatch(f -> f.toString().endsWith(de.knirpslarsi.ledstudio.model.Show.EXTENSION));
+                }
+            }
+            if (shows) plugins.installBuiltin(de.knirpslarsi.ledstudio.plugins.Plugins.SHOW);
+            project.featuresMigrated = true;
+            project.save();
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Plugins für Spiele/Show nicht angelegt", e);
+        }
+    }
+
+    /** Ob ein mitgeliefertes Plugin (Spiele, Show) installiert und eingeschaltet ist. */
+    public boolean feature(String feature) {
+        return plugins.featureActive(feature);
+    }
+
+    /** Nach Installieren, Entfernen oder Umschalten eines Plugins aufrufen. */
+    public void featuresChanged() {
+        games.setActive(feature(de.knirpslarsi.ledstudio.plugins.Plugins.GAMES));
+        featureListeners.forEach(Runnable::run);
+    }
+
+    public void onFeatures(Runnable r) {
+        featureListeners.add(r);
     }
 
     public void start() {
         engine.start();
         audio.start();
         connection.start();
-        games.start();
+        games.setActive(feature(de.knirpslarsi.ledstudio.plugins.Plugins.GAMES));
     }
 
     /** Speichert und schaltet die LEDs aus. */
@@ -111,6 +153,15 @@ public final class AppCore {
 
     private void statusChanged(String s) {
         Platform.runLater(() -> statusListeners.forEach(l -> l.accept(s)));
+    }
+
+    /** Lädt eigene Effekte und die Effekte aller eingeschalteten Plugins neu. Gibt Fehlermeldungen zurück. */
+    public List<String> reloadEffects() {
+        List<ScriptEffects.Extra> extras = new ArrayList<>();
+        for (var e : plugins.effectFiles()) extras.add(new ScriptEffects.Extra(e.effectId(), e.file(), e.plugin().name));
+        List<String> errors = ScriptEffects.load(AppPaths.effectsDir(), extras);
+        if (engine != null) engine.apply(project, compiled);
+        return errors;
     }
 
     public CompiledLayout compiled() {

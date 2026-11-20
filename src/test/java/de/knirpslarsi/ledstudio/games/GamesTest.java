@@ -221,7 +221,7 @@ class GamesTest {
         GameLink link = new GameLink(p, r.engine(), () -> p.current, name -> {
         }, Runnable::run, () -> {
         });
-        link.settingsChanged();
+        link.setActive(true);
         java.net.http.HttpClient http = java.net.http.HttpClient.newHttpClient();
         java.util.function.BiConsumer<JsonObject, String> send = (json, token) -> {
             json.add("auth", JsonParser.parseString("{\"token\":\"" + token + "\"}"));
@@ -244,6 +244,40 @@ class GamesTest {
         } finally {
             link.stop();
             r.engine().stop();
+        }
+    }
+
+    @Test
+    void withoutThePluginNothingListens() throws Exception {
+        Rig r = rig();
+        Project p = r.project();
+        p.games = new Games();
+        p.games.complete();
+        try (java.net.ServerSocket free = new java.net.ServerSocket(0)) {
+            p.games.cs2.port = free.getLocalPort();
+        }
+        GameLink link = new GameLink(p, r.engine(), () -> p.current, name -> {
+        }, Runnable::run, () -> {
+        });
+        try {
+            link.settingsChanged();
+            assertFalse(link.active());
+            assertTrue(portFree(p.games.cs2.port), "kein CS2-Empfang ohne Plugin");
+            link.setActive(true);
+            assertFalse(portFree(p.games.cs2.port), "mit Plugin empfängt es");
+            link.setActive(false);
+            assertTrue(portFree(p.games.cs2.port), "Plugin entfernt: Port wieder frei");
+        } finally {
+            link.stop();
+            r.engine().stop();
+        }
+    }
+
+    private static boolean portFree(int port) {
+        try (java.net.ServerSocket s = new java.net.ServerSocket(port, 1, java.net.InetAddress.getLoopbackAddress())) {
+            return true;
+        } catch (java.io.IOException e) {
+            return false;
         }
     }
 }

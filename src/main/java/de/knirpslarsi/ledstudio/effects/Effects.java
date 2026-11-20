@@ -22,6 +22,18 @@ public final class Effects {
         add(LegacyEffects.Fire::new);
         add(LegacyEffects.Static::new);
         add(RandomBlink::new);
+        add(Animations.Boot::new);
+        add(Animations.SpinUp::new);
+        add(Animations.Shockwave::new);
+        add(Animations.Explosion::new);
+        add(Animations.Warp::new);
+        add(Animations.Scan::new);
+        add(Animations.Fireworks::new);
+        add(Animations.Hit::new);
+        add(Animations.Alarm::new);
+        add(Animations.Flatline::new);
+        add(Animations.Shatter::new);
+        add(Animations.Heartbeat::new);
         add(LegacyEffects.CounterWave::new);
         add(MusicEffect::new);
         add(MusicEffect.PulseRings::new);

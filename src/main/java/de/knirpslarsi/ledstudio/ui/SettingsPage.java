@@ -4,6 +4,7 @@ import de.knirpslarsi.ledstudio.effects.ScriptEffects;
 import de.knirpslarsi.ledstudio.model.LegacyImport;
 import de.knirpslarsi.ledstudio.update.Updater;
 import de.knirpslarsi.ledstudio.util.AppPaths;
+import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -68,6 +69,9 @@ final class SettingsPage extends ScrollPane {
         auto.selectedProperty().addListener((o, a, b) -> save(() -> p.autoUpdate = b));
         updateStatus.textProperty().bind(updates.status);
 
+        VBox intro = new VBox(8);
+        buildIntro(intro, false);
+
         TextArea diag = new TextArea();
         diag.setEditable(false);
         diag.setPrefRowCount(10);
@@ -84,6 +88,9 @@ final class SettingsPage extends ScrollPane {
                 Ui.button("Neu verbinden", core.connection::reconnect),
                 Ui.section("Programm"),
                 autostart, tray,
+                Ui.section("Startanimation"),
+                wrap("Läuft einmal, sobald nach dem Start die LEDs erreichbar sind."),
+                intro,
                 Ui.section("Updates"),
                 Ui.label("Installierte Version: " + Updater.currentVersion(), "muted"),
                 auto, updateStatus,
@@ -104,6 +111,24 @@ final class SettingsPage extends ScrollPane {
         setFitToWidth(true);
         getStyleClass().add("panel");
         core.onDevices(refreshDiag);
+    }
+
+    /** Startanimation: an/aus, abspielen, anpassen, Standard. */
+    private void buildIntro(VBox into, boolean open) {
+        var a = core.project.games.appIntro;
+        CheckBox on = new CheckBox("Beim Start der Software abspielen");
+        on.setSelected(a.enabled);
+        on.selectedProperty().addListener((o, x, y) -> save(() -> a.enabled = y));
+        Button edit = Ui.button(open ? "Schließen" : "Anpassen", () -> buildIntro(into, !open));
+        Button reset = Ui.button("Standard", "Die mitgelieferte Startanimation wiederherstellen", () -> {
+            core.project.games.appIntro = de.knirpslarsi.ledstudio.model.Games.appIntroDefault();
+            core.settingsChanged();
+            buildIntro(into, open);
+        });
+        into.getChildren().setAll(Ui.row(on, Ui.grow(), reset, Ui.button("▶ Abspielen", () -> core.games.preview(core.project.games.appIntro)), edit));
+        into.getStyleClass().setAll("layer-row");
+        into.setStyle("-fx-padding: 10;");
+        if (open) into.getChildren().add(new AnimationEditor(a, core::settingsChanged));
     }
 
     private static Label wrap(String text) {
@@ -142,7 +167,7 @@ final class SettingsPage extends ScrollPane {
     }
 
     private void reloadEffects() {
-        List<String> errors = ScriptEffects.load(AppPaths.effectsDir());
+        List<String> errors = core.reloadEffects();
         onImported.run();
         Ui.info(getScene().getWindow(), "Effekte", errors.isEmpty() ? "Effekte neu geladen." : String.join("\n", errors));
     }
