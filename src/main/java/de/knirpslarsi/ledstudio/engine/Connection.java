@@ -36,6 +36,8 @@ public final class Connection {
     private volatile String lastError = "";
     private long launchedAt;
     private Thread thread;
+    /** Zusätzliche WLED-Geräte (leer ohne Plugin). */
+    private volatile Supplier<List<de.knirpslarsi.ledstudio.model.WledDevice>> wled = List::of;
 
     public Connection(Project project, boolean autostart, Supplier<LedBackend> demo, Consumer<LedBackend> onBackend,
                       Consumer<List<Controller>> onDevices, Consumer<String> onStatus) {
@@ -45,6 +47,10 @@ public final class Connection {
         this.onBackend = onBackend;
         this.onDevices = onDevices;
         this.onStatus = onStatus;
+    }
+
+    public void setWled(Supplier<List<de.knirpslarsi.ledstudio.model.WledDevice>> devices) {
+        wled = devices == null ? List::of : devices;
     }
 
     public void start() {
@@ -104,8 +110,7 @@ public final class Connection {
                 backend = b;
                 publish(b.controllers());
                 onBackend.accept(b);
-                setStatus(demo != null ? "Demo-Modus (keine echte Hardware)"
-                        : "Verbunden: " + b.controllers().size() + " Geräte");
+                setStatus(statusText(b));
                 watch(b);
             } catch (IOException e) {
                 lastError = e.getMessage();
@@ -125,23 +130,78 @@ public final class Connection {
         onDevices.accept(list);
     }
 
+    private String statusText(LedBackend b) {
+        if (demo != null) return "Demo-Modus (keine echte Hardware)";
+        if (b instanceof de.knirpslarsi.ledstudio.openrgb.MultiBackend m && !m.hasPrimary())
+            return "Nur WLED: " + b.controllers().size() + " Geräte (OpenRGB nicht erreichbar)";
+        return "Verbunden: " + b.controllers().size() + " Geräte";
+    }
+
     private LedBackend connect() throws IOException {
-        if (demo != null) return demo.get();
-        setStatus("Warte auf OpenRGB…");
-        if (!ensureOpenRgb()) return null;
-        setStatus("Verbinde mit OpenRGB…");
-        return new OpenRgbClient(project.host, project.port, CLIENT_NAME);
+        List<de.knirpslarsi.ledstudio.model.WledDevice> extra = wled.get();
+        LedBackend primary;
+        if (demo != null) {
+            primary = demo.get();
+        } else if (extra.isEmpty()) {
+            setStatus("Warte auf OpenRGB…");
+            if (!ensureOpenRgb()) return null;
+            setStatus("Verbinde mit OpenRGB…");
+            primary = new OpenRgbClient(project.host, project.port, CLIENT_NAME);
+        } else {
+            // Mit WLED nicht auf OpenRGB warten: WLED läuft sofort, OpenRGB kommt dazu, sobald es erreichbar ist.
+            primary = null;
+            if (portOpen()) {
+                setStatus("Verbinde mit OpenRGB…");
+                try {
+                    primary = new OpenRgbClient(project.host, project.port, CLIENT_NAME);
+                } catch (IOException e) {
+                    lastError = e.getMessage();
+                }
+            } else {
+                launchOpenRgb();
+            }
+        }
+        if (extra.isEmpty()) return primary;
+        try {
+            return new de.knirpslarsi.ledstudio.openrgb.MultiBackend(primary, new de.knirpslarsi.ledstudio.wled.WledBackend(extra));
+        } catch (IOException e) {
+            if (primary != null) primary.close();
+            throw e;
+        }
+    }
+
+    /** Startet OpenRGB, ohne darauf zu warten. */
+    private void launchOpenRgb() {
+        String path = project.openrgbPath == null || project.openrgbPath.isBlank() ? findOpenRgb() : project.openrgbPath;
+        if (!project.startOpenrgb || path.isBlank() || !Files.exists(Path.of(path)) || openRgbRunning()) return;
+        if (System.currentTimeMillis() - launchedAt < 120_000) return;
+        try {
+            new ProcessBuilder(path, "--server", "--startminimized").directory(Path.of(path).getParent().toFile()).start();
+            launchedAt = System.currentTimeMillis();
+        } catch (IOException e) {
+            lastError = "OpenRGB-Start: " + e.getMessage();
+        }
     }
 
     private void watch(LedBackend b) throws IOException {
+        long checked = System.currentTimeMillis();
         while (running && !reconnect) {
             sleep(400);
+            // Nur WLED lief, jetzt ist OpenRGB da: neu verbinden, damit beides läuft.
+            if (b instanceof de.knirpslarsi.ledstudio.openrgb.MultiBackend m && !m.hasPrimary() && demo == null
+                    && System.currentTimeMillis() - checked > 5000) {
+                checked = System.currentTimeMillis();
+                if (portOpen()) {
+                    sleep(3000);
+                    return;
+                }
+            }
             if (!b.alive()) throw new IOException("OpenRGB-Verbindung abgerissen");
             if (b.consumeDeviceListChanged()) {
                 sleep(500); // OpenRGB meldet während der Erkennung oft mehrfach
                 b.consumeDeviceListChanged();
                 publish(b.refresh());
-                setStatus("Verbunden: " + b.controllers().size() + " Geräte");
+                setStatus(statusText(b));
             }
         }
     }

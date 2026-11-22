@@ -83,6 +83,9 @@ Zwei **offizielle Plugins** sind mitgeliefert und werden dort installiert oder e
 - **Spiele & Counter-Strike 2** – erkennt den Spielstart, spielt eine Animation je Spiel, zeigt im Spiel eine eigene
   Vorlage und bringt CS2-Ereignisse (Bombe, Kills, Treffer, Tod …) über Valves Game State Integration auf die LEDs.
 
+Aus dem Katalog kommt außerdem **[WLED](https://github.com/Knirpslarsi/LED-Studio-WLED)**: steuert WLED-Geräte im
+Netzwerk (Suche oder IP, Ausgabe per DDP) wie jedes andere Gerät – im Layout platzieren, fertig. Läuft auch ohne OpenRGB.
+
 Die **Startanimation** beim Programmstart stellst du unter **Einstellungen** ein.
 
 ## Show (Timecode)

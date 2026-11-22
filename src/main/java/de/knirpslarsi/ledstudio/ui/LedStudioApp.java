@@ -52,7 +52,8 @@ public final class LedStudioApp extends Application {
     /** Seiten aus mitgelieferten Plugins: erst gebaut, wenn das Plugin aktiv ist und die Seite geöffnet wird. */
     private final Map<String, java.util.function.Supplier<Node>> factories = new java.util.HashMap<>();
     private static final Map<String, String> FEATURE_PAGES = Map.of(
-            "Show", de.knirpslarsi.ledstudio.plugins.Plugins.SHOW, "Spiele", de.knirpslarsi.ledstudio.plugins.Plugins.GAMES);
+            "Show", de.knirpslarsi.ledstudio.plugins.Plugins.SHOW, "Spiele", de.knirpslarsi.ledstudio.plugins.Plugins.GAMES,
+            "WLED", de.knirpslarsi.ledstudio.plugins.Plugins.WLED);
     private String currentPage = "";
     private final Map<String, ToggleButton> navButtons = new LinkedHashMap<>();
     private final StackPane content = new StackPane();
@@ -80,6 +81,8 @@ public final class LedStudioApp extends Application {
         factories.put("Show", () -> new ShowPage(core));
         pages.put("Spiele", null);
         factories.put("Spiele", () -> new GamesPage(core));
+        pages.put("WLED", null);
+        factories.put("WLED", () -> new WledPage(core));
         pages.put("Plugins", new PluginsPage(core));
         pages.put("Einstellungen", new SettingsPage(core, updates, () -> effectsPage.externalChange()));
         pages.put("Hilfe", new HelpPage(core));
@@ -339,6 +342,7 @@ public final class LedStudioApp extends Application {
                 try {
                     core.plugins.installBuiltin(de.knirpslarsi.ledstudio.plugins.Plugins.GAMES);
                     core.plugins.installBuiltin(de.knirpslarsi.ledstudio.plugins.Plugins.SHOW);
+                    core.plugins.installBuiltin(de.knirpslarsi.ledstudio.plugins.Plugins.WLED);
                 } catch (IOException ex) {
                     LOG.log(Level.WARNING, "Demo-Plugins", ex);
                 }
@@ -358,6 +362,7 @@ public final class LedStudioApp extends Application {
             names.add("Feinschliff");
             names.add("Musikreaktion");
             if (ensure("Show") instanceof ShowPage show) show.demo();
+            if (ensure("WLED") instanceof WledPage wled) wled.demo();
             names.add("Musik-Ebene");
             names.add("Spiele offen");
             shoot(dir, names.toArray(new String[0]), 0);

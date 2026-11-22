@@ -70,7 +70,8 @@ final class PluginsPage extends ScrollPane {
     // ---- Mitgelieferte Plugins
 
     private void official() {
-        List<Plugins.Builtin> missing = Plugins.BUILTINS.stream().filter(b -> !core.plugins.featureInstalled(b.feature())).toList();
+        List<Plugins.Builtin> missing = Plugins.BUILTINS.stream()
+                .filter(b -> b.offered() && !core.plugins.featureInstalled(b.feature())).toList();
         if (missing.isEmpty()) return;
         box.getChildren().addAll(Ui.section("Offizielle Plugins"),
                 muted("Gehören zu LED Studio und sind sofort da, ohne Download."));

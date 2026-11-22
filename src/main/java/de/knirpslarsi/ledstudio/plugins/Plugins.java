@@ -62,17 +62,22 @@ public final class Plugins {
     }
 
     /** Funktionen, die in LED Studio stecken, aber erst als Plugin installiert werden müssen. */
-    public record Builtin(String feature, String id, String name, String description) {
+    /** offered: steht unter „Offizielle Plugins“; sonst kommt es als Plugin aus seinem eigenen GitHub-Repo. */
+    public record Builtin(String feature, String id, String name, String description, boolean offered) {
     }
 
-    public static final String GAMES = "games", SHOW = "show";
+    public static final String GAMES = "games", SHOW = "show", WLED = "wled";
+    /** Repo des WLED-Plugins; es schaltet die eingebaute WLED-Anbindung frei. */
+    public static final String WLED_REPO = "Knirpslarsi/LED-Studio-WLED";
 
     public static final List<Builtin> BUILTINS = List.of(
             new Builtin(GAMES, "spiele", "Spiele & Counter-Strike 2",
                     "Erkennt den Spielstart, spielt eine Animation je Spiel, zeigt im Spiel eine eigene Vorlage und bringt "
-                            + "CS2-Ereignisse wie Bombe, Kills und Treffer auf die LEDs."),
+                            + "CS2-Ereignisse wie Bombe, Kills und Treffer auf die LEDs.", true),
             new Builtin(SHOW, "show-editor", "Show-Editor",
-                    "Lichtshows passend zu Songs: Zeitleiste mit Spuren, Clips, Markierungen, Sequenzen und zufälligen LEDs."));
+                    "Lichtshows passend zu Songs: Zeitleiste mit Spuren, Clips, Markierungen, Sequenzen und zufälligen LEDs.", true),
+            new Builtin(WLED, "wled", "WLED",
+                    "Steuert WLED-Geräte im Netzwerk wie jedes andere Gerät: im Layout platzieren, Effekte, Musik und Shows.", false));
 
     public static Builtin builtin(String feature) {
         for (Builtin b : BUILTINS) if (b.feature.equals(feature)) return b;

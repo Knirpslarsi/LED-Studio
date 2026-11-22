@@ -69,6 +69,8 @@ public final class AppCore {
         });
         connection = new Connection(project, autostart, demo ? DemoBackend::new : null,
                 this::backendChanged, this::devicesChanged, this::statusChanged);
+        connection.setWled(() -> feature(de.knirpslarsi.ledstudio.plugins.Plugins.WLED)
+                ? project.wled.stream().filter(d -> d.enabled && !d.host.isBlank()).toList() : List.of());
         compiled = CompiledLayout.compile(project.fixtures, List.of());
         engine.apply(project, compiled);
         games = new de.knirpslarsi.ledstudio.games.GameLink(project, engine, () -> project.current, this::selectPreset,
@@ -108,6 +110,7 @@ public final class AppCore {
     /** Nach Installieren, Entfernen oder Umschalten eines Plugins aufrufen. */
     public void featuresChanged() {
         games.setActive(feature(de.knirpslarsi.ledstudio.plugins.Plugins.GAMES));
+        if (!project.wled.isEmpty()) connection.reconnect(); // WLED-Geräte kommen dazu oder fallen weg
         featureListeners.forEach(Runnable::run);
     }
 

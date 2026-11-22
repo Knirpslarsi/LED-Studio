@@ -173,6 +173,8 @@ public class Project {
     /** Beim Laden: Gab es schon Spiele-Einstellungen (also lief 1.5.0)? Wird nicht gespeichert. */
     public transient boolean hadGames;
     public List<Fixture> fixtures = new ArrayList<>();
+    /** WLED-Geräte (Plugin „WLED“). */
+    public List<WledDevice> wled = new ArrayList<>();
 
     public Preset preset(String name) {
         for (Preset p : presets) if (p.name.equals(name)) return p;
@@ -232,6 +234,7 @@ public class Project {
         p.addNewDefaultPresets(defaultPresets());
         if (p.audio == null) p.audio = new Audio();
         if (p.fixtures == null) p.fixtures = new ArrayList<>();
+        if (p.wled == null) p.wled = new ArrayList<>();
         p.hadGames = p.games != null;
         if (p.games == null) p.games = new Games();
         p.games.complete();
